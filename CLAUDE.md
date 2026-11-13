@@ -26,6 +26,7 @@ keep personal data (real emails, names, phone numbers, hostnames, absolute paths
 | Run the web console manually | `python MonitoringConsole\monitoring_console.py` → `http://localhost:5758` |
 | Python tests | `python -m unittest discover -s tests/python` |
 | PowerShell tests | `Invoke-Pester tests/powershell` (Pester 5.5+) |
+| Docker demo (simulated monitors) | `docker compose up --build`, then `python docker/smoke_test.py` |
 
 `start_monitoring.bat` calls `scripts/start_monitoring.ps1`, which: (0) runs the doctor's config/path/environment
 checks and aborts **without touching running monitors** on any FAIL, (1) stops running monitors, (2) launches each
@@ -70,6 +71,9 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
   spawning the editor; `/api/status` reports `capabilities` and `demo_mode`. Environment: `BIND_HOST` (default
   `localhost`), `NO_BROWSER`, `DEMO_MODE`, `EDITOR_HOST` (where the console probes the editor). Never bind to
   anything but localhost on Windows.
+- **`docker/`**: `simulator.py` writes the same state files as the monitors (re-reads the settings every cycle; keep
+  its output in step with the monitors' state-file formats), `run_demo.py` runs simulator + editor + console in one
+  container, `smoke_test.py` is the CI check. New files the image needs must be added to the `Dockerfile` COPY lines.
 - **`POST /api/open-editor`** (console): starts `server.py --no-browser` hidden with its full path (that's how
   `stop_monitoring.ps1` finds it) unless port 5757 already answers, waits for it, and returns its URL.
 - **Web UI**: the console page is `web/console.html` (plain HTML/JS, no build step); the editor is

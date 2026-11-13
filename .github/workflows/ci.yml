@@ -62,3 +62,26 @@ jobs:
         with:
           name: pester-results
           path: pester-results.xml
+
+  docker:
+    name: Docker demo (Linux container)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build and start the demo
+        run: docker compose up --build -d
+
+      - name: Smoke test (pages, simulated data, read-only mode, editor)
+        run: python3 docker/smoke_test.py
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop
+        if: always()
+        run: docker compose down

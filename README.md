@@ -100,6 +100,15 @@ CPU and RAM, the `C:` drive, two public DNS servers, and a made-up budget CSV, p
 to end, open and then close **Notepad**: within about 30 seconds the console shows it as *NOT RUNNING* with an alert
 count, and `logs/monitor.log` records the event and its recovery. **[How to trigger every alert →](docs/test-environment.md)**
 
+### Try it without Windows (Docker)
+
+```bash
+docker compose up --build        # console: http://localhost:5758   editor: http://localhost:5757
+```
+
+The real web console and settings editor, fed by simulated monitors. The banner says so. Why the monitors themselves
+can't run in a container is explained in **[docs/docker.md](docs/docker.md)**.
+
 ### What the doctor reports
 
 Abbreviated output from a healthy system:
@@ -204,6 +213,8 @@ Invoke-Pester tests/powershell                      # requires Pester 5.5+
 │   ├── actions/                  # sample run_script remediation handlers
 │   └── lib/                      # MonitorCommon, MonitorActions, DocumentReader, ActionHandler, Doctor
 ├── sample_data/                  # made-up budget CSV (default) and a sample workbook
+├── docker/                       # demo container: simulator, entry point, smoke test
+├── Dockerfile, docker-compose.yml
 ├── tests/                        # Pester + Python unittest suites
 └── docs/                         # configuration reference, design decisions, screenshots
 ```
@@ -220,15 +231,16 @@ The short version (details and trade-offs in **[docs/design-decisions.md](docs/d
   make configuration problems visible *before* anything starts.
 - **Localhost-only, same-origin APIs.** Both servers bind to `localhost` and reject cross-origin or rebinding
   requests, so a malicious web page can't rewrite the config or trigger actions.
-- **Why not Docker?** The monitors depend on WMI, Excel COM and the Windows desktop. Containerizing would mean
-  rewriting them on `psutil`/`openpyxl`. The analysis is in the design notes.
+- **Docker runs the demo, not the monitors.** The monitors depend on WMI, perf counters, Excel COM and the Windows
+  desktop, which a container is isolated from by design. The image runs the real console and editor with simulated
+  monitors instead. See [docs/docker.md](docs/docker.md).
 
 ## Roadmap
 
 - Read the workbook with `openpyxl` instead of Excel COM: no Office dependency, much faster cycles.
 - Optional SMTP delivery alongside the current `mailto:` drafts.
 - Run the monitors as a Windows service (e.g. via NSSM) instead of a logged-in session.
-- Cross-platform collectors (`psutil`) as a first step toward a Linux container.
+- Cross-platform collectors (`psutil`) running on the host, so the containerized dashboard could show real data.
 
 ## More
 

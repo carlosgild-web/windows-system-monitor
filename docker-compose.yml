@@ -1,0 +1,15 @@
+# Demo: the real console and settings editor with simulated monitors, on any OS.
+#   docker compose up --build      console: http://localhost:5758   editor: http://localhost:5757
+#   docker compose down
+# Ports are published on 127.0.0.1 only: the demo is not reachable from the network,
+# and the servers' Host/Origin checks keep working (they expect localhost:<port>).
+name: windows-system-monitor-demo
+
+services:
+  demo:
+    build: .
+    image: windows-system-monitor-demo:local
+    ports:
+      - "127.0.0.1:5758:5758"
+      - "127.0.0.1:5757:5757"
+    restart: unless-stopped
