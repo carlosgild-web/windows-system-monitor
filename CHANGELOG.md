@@ -21,6 +21,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   `logs/alert_state.json` so it survives restarts.
 
 ### Changed
+- **Redesigned web console.** An overview row (critical / warning / healthy / monitors live), cards that flow into
+  as many columns as fit (one column on phones), meters with threshold ticks, one status badge per row, neutral
+  Pause/Resume controls (red is only used for critical status), and light and dark themes with a switch. Info
+  tooltips also open on keyboard focus. The page moved out of the Python file into `web/console.html`; a shared
+  theme, SVG icon set and favicon live in `web/static/`, served by both servers at `/static/`.
 - **Breaking:** the `ebook_sales` config section is replaced by `document` (the doctor warns if it is still
   present); see the upgrade note in `docs/configuration.md`. The doctor checks for Excel only when the document is
   a workbook.

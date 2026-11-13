@@ -18,10 +18,12 @@ import os
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
+from urllib.parse import unquote
 
 BASE = Path(__file__).parent.resolve()
 JSON_FILE = BASE / "monitoring_settings.json"
 HTML_FILE = BASE / "monitoring_editor.html"
+STATIC_DIR = BASE / "web" / "static"   # theme, icons, images (shared with the console)
 PORT = 5757
 MAX_BODY_BYTES = 2 * 1024 * 1024
 OPENABLE_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv"}
@@ -42,6 +44,40 @@ def is_same_origin(headers, port: int) -> bool:
     if origin is None:
         return True
     return origin in {f"http://{h}" for h in allowed}
+
+
+STATIC_TYPES = {
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".ico": "image/x-icon",
+    ".woff2": "font/woff2",
+}
+
+
+def resolve_static(url_path: str):
+    """Map /static/<file> to a file inside STATIC_DIR, or None.
+
+    Only known asset types are served, and the resolved path must stay inside
+    STATIC_DIR, so /static/../server.py or an encoded traversal returns 404.
+    """
+    rel = url_path.split("?", 1)[0].split("#", 1)[0]
+    if not rel.startswith("/static/"):
+        return None
+    rel = unquote(rel[len("/static/"):])
+    if not rel or "\\" in rel or "\x00" in rel:
+        return None
+    try:
+        target = (STATIC_DIR / rel).resolve()
+    except (OSError, ValueError):
+        return None
+    if STATIC_DIR not in target.parents or not target.is_file():
+        return None
+    if target.suffix.lower() not in STATIC_TYPES:
+        return None
+    return target
 
 
 def resolve_openable(rel: str):
@@ -67,6 +103,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(HTML_FILE.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/api/settings":
             self._send(JSON_FILE.read_bytes(), "application/json; charset=utf-8")
+        elif self.path.startswith("/static/"):
+            target = resolve_static(self.path)
+            if target is None:
+                return self.send_error(404)
+            self._send(target.read_bytes(), STATIC_TYPES[target.suffix.lower()])
         else:
             self.send_error(404)
 

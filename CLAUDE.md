@@ -66,6 +66,11 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
 - **Web servers** (stdlib only) bind to localhost and reject any POST whose `Host`/`Origin` is not their own page
   (CSRF / DNS-rebinding protection). They read the request body before replying, because an early reply with
   unread data resets the connection on Windows. Keep both properties when adding endpoints.
+- **Web UI**: the console page is `web/console.html` (plain HTML/JS, no build step); the editor is
+  `monitoring_editor.html`. Both load `web/static/theme.css` (color tokens, light + dark), `theme.js` (theme switch)
+  and `icons.svg` (sprite: `<svg class="icon"><use href="/static/icons.svg#i-name"/></svg>`) through a `/static/`
+  route that only serves whitelisted file types from inside `web/static/`. No CDNs: the app must work offline.
+  Status colors (`--ok/--warn/--crit`) are for status only; controls stay neutral or use `--accent`.
 
 ## Configuration schema
 

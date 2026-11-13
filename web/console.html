@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitoring Console</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js"></script>
+<style>
+body { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ---- header: live indicator ---- */
+.live { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-3); padding: 0 8px; white-space: nowrap; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--unk-fill); flex-shrink: 0; }
+.live-dot.on { background: var(--ok-fill); box-shadow: 0 0 0 0 var(--ok-fill); animation: ping 2.4s ease-out infinite; }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok-fill) 55%, transparent); } 80%, 100% { box-shadow: 0 0 0 7px transparent; } }
+
+/* ---- page ---- */
+.page { flex: 1; width: 100%; max-width: 1440px; margin: 0 auto; padding: 20px 20px 28px; }
+
+/* ---- overview ---- */
+.overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+.tile { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tile-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-2); font-size: 13px; font-weight: 600; }
+.tile-ico { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-2); color: var(--text-3); }
+.tile-val { font-family: var(--font-display); font-size: 30px; font-weight: 650; line-height: 1.1; letter-spacing: -.02em; }
+.tile-note { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile.t-crit.has .tile-ico { background: var(--crit-bg); color: var(--crit); }
+.tile.t-crit.has .tile-val { color: var(--crit); }
+.tile.t-warn.has .tile-ico { background: var(--warn-bg); color: var(--warn); }
+.tile.t-warn.has .tile-val { color: var(--warn); }
+.tile.t-ok .tile-ico { background: var(--ok-bg); color: var(--ok); }
+.mon-pills { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.mon-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-3); }
+.mon-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--unk-fill); }
+.mon-item.mon-active { color: var(--text-2); }
+.mon-item.mon-active .mon-dot { background: var(--ok-fill); }
+
+/* ---- board: cards flow into as many columns as fit ---- */
+.board { columns: 2 460px; column-gap: 16px; }
+.mon-card { break-inside: avoid; margin-bottom: 16px; overflow: hidden; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px 12px 16px; border-bottom: 1px solid var(--border); }
+.card-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.card-ico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--accent-weak); color: var(--accent); flex-shrink: 0; }
+.card-name { font-size: 15px; font-weight: 650; }
+.card-meta { font-size: 12px; color: var(--text-3); }
+.card-ctrl { display: flex; align-items: center; gap: 8px; }
+.mon-card.paused .card-ico { background: var(--surface-2); color: var(--text-3); }
+.mon-card.paused .card-body { opacity: .45; filter: grayscale(1); pointer-events: none; }
+
+/* ---- rows ---- */
+.row { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 14px 11px 18px; border-bottom: 1px solid var(--border); min-height: 58px; }
+.row:last-child { border-bottom: 0; }
+.row::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--unk-fill); }
+.row.lvl-ok::before { background: var(--ok-fill); }
+.row.lvl-warning::before { background: var(--warn-fill); }
+.row.lvl-critical::before { background: var(--crit-fill); }
+.row-main { flex: 1; min-width: 0; }
+.row-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; }
+.row-title span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-sub { margin-top: 2px; font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-sub.err { color: var(--crit); white-space: normal; }
+.info-btn { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-3); cursor: help; flex-shrink: 0; }
+.info-btn:hover, .info-btn:focus-visible { background: var(--surface-2); color: var(--text); }
+.row-metric { flex-shrink: 0; width: 132px; text-align: right; }
+.metric-val { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.metric-note { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+.meter { position: relative; height: 6px; margin-top: 6px; border-radius: 99px; background: var(--surface-3); }
+.meter-fill { height: 100%; border-radius: 99px; background: var(--ok-fill); transition: width .5s ease; }
+.meter-fill.lvl-warning { background: var(--warn-fill); }
+.meter-fill.lvl-critical { background: var(--crit-fill); }
+.meter-fill.lvl-unknown { background: var(--unk-fill); }
+.tick { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text-3); opacity: .55; }
+.tick.t-critical { background: var(--crit); opacity: .8; }
+.tick.t-warning { background: var(--warn); opacity: .8; }
+.row-badge { flex-shrink: 0; width: 98px; display: flex; justify-content: flex-end; }
+.row .btn { flex-shrink: 0; }
+.empty { display: flex; align-items: center; gap: 10px; padding: 18px 16px; font-size: 13px; color: var(--text-3); }
+.empty code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; color: var(--text-2); }
+.fade-in { animation: fade .2s ease; }
+@keyframes fade { from { opacity: .4; } to { opacity: 1; } }
+
+/* ---- footer ---- */
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 20px; border-top: 1px solid var(--border); background: var(--surface); font-size: 12px; color: var(--text-3); }
+.cd { display: inline-flex; align-items: center; gap: 8px; }
+.cd-bar { width: 64px; height: 4px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+.cd-fill { height: 100%; background: var(--accent); border-radius: 99px; }
+
+/* ---- tooltip ---- */
+#tt-box { position: fixed; display: none; z-index: 9999; pointer-events: none; min-width: 260px; max-width: 360px; padding: 12px 14px; border-radius: 10px; background: var(--tooltip-bg); color: var(--tooltip-text); font-size: 12.5px; line-height: 1.55; box-shadow: var(--shadow-lg); }
+.tt-title { font-weight: 650; font-size: 13.5px; margin-bottom: 2px; }
+.tt-meta { color: var(--tooltip-muted); }
+.tt-cur { margin-top: 6px; }
+.tt-hr { height: 1px; margin: 9px 0; background: color-mix(in srgb, var(--tooltip-muted) 30%, transparent); }
+.tt-thresh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 5px; }
+.tt-lvl { font-weight: 700; font-size: 11px; letter-spacing: .04em; }
+.tt-lvl.warning { color: var(--warn-fill); }
+.tt-lvl.critical { color: var(--crit-fill); }
+.tt-acts { display: inline-flex; gap: 4px; color: var(--tooltip-muted); }
+.tt-instr { white-space: pre-wrap; color: var(--tooltip-muted); max-height: 84px; overflow: hidden; }
+
+/* ---- dialogs ---- */
+.scrim { position: fixed; inset: 0; z-index: 200; display: none; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; background: var(--scrim); overflow-y: auto; }
+.scrim.open { display: flex; }
+.dialog { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); animation: rise .18s ease; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; }
+.dialog-title { font-family: var(--font-display); font-size: 17px; font-weight: 650; }
+.dialog-sub { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+.dialog-body { padding: 4px 20px 20px; }
+.kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 13px; margin-bottom: 14px; }
+.kv dt { color: var(--text-3); font-size: 12px; font-weight: 600; padding-top: 1px; }
+.kv dd { margin: 0; word-break: break-word; }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); font-size: 12px; color: var(--text-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.runbook { white-space: pre-line; line-height: 1.6; font-size: 13px; padding: 12px 14px; border-radius: 10px; background: var(--warn-bg); border: 1px solid var(--warn-bd); color: var(--text); }
+.runbook-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; color: var(--warn); margin-bottom: 6px; }
+
+.tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tab { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--text-3); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.det-body { padding: 16px 20px 20px; max-height: 66vh; overflow-y: auto; }
+.det-sec { display: none; }
+.det-sec.active { display: block; }
+.det-card { padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.det-card-title { display: flex; align-items: center; gap: 8px; font-weight: 650; margin-bottom: 10px; }
+.det-row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; font-size: 13px; margin-bottom: 5px; }
+.det-lbl { color: var(--text-3); font-size: 12px; font-weight: 600; }
+.det-val { word-break: break-word; }
+.det-val code { background: var(--surface-3); padding: 1px 6px; border-radius: 4px; }
+.det-thresh-hd { font-size: 12px; font-weight: 650; color: var(--text-3); margin: 12px 0 6px; }
+.det-tlvl { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--border); border-left: 3px solid var(--unk-fill); border-radius: 8px; background: var(--surface); font-size: 13px; }
+.det-tlvl-warning { border-left-color: var(--warn-fill); }
+.det-tlvl-critical { border-left-color: var(--crit-fill); }
+.det-act { display: flex; gap: 8px; align-items: flex-start; padding: 7px 0; border-top: 1px solid var(--border); }
+.det-act:first-child { border-top: 0; }
+.det-act-text { flex: 1; min-width: 0; font-size: 12px; color: var(--text-3); white-space: pre-wrap; }
+.det-act-lvl { font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.det-act-lvl.critical { color: var(--crit); }
+.det-act-lvl.warning { color: var(--warn); }
+.none { font-size: 12px; color: var(--text-3); padding: 4px 0; }
+
+/* ---- small screens ---- */
+@media (max-width: 900px) {
+  .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .board { columns: 1; }
+}
+@media (max-width: 560px) {
+  .app-header { padding: 8px 16px; }
+  .brand-sub, .live-text, .hide-sm { display: none; }
+  .page { padding: 16px 16px 24px; }
+  .row { flex-wrap: wrap; padding-left: 16px; }
+  .row-main { flex-basis: 100%; }
+  .row-metric { width: auto; flex: 1; text-align: left; }
+  .row-badge { width: auto; }
+  .kv, .det-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true"><svg class="icon icon-lg"><use href="/static/icons.svg#i-logo"/></svg></div>
+    <div>
+      <div class="brand-name">Monitoring Console</div>
+      <div class="brand-sub">Windows System Monitor <span id="ver" class="num"></span></div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span class="live" aria-live="polite"><span class="live-dot" id="pdot"></span><span class="live-text" id="refresh-lbl">Connecting&hellip;</span></span>
+    <button class="btn btn-ghost" onclick="showDetails()" title="All monitors, thresholds and actions">
+      <svg class="icon"><use href="/static/icons.svg#i-list"/></svg><span class="hide-sm">Details</span>
+    </button>
+    <button class="btn btn-ghost btn-icon" data-theme-toggle><svg class="icon"><use href="/static/icons.svg#i-monitor"/></svg></button>
+  </div>
+</header>
+
+<main class="page">
+  <section class="overview" aria-label="Overview">
+    <div class="card tile t-crit" id="tile-crit">
+      <div class="tile-top">Critical<span class="tile-ico"><svg class="icon"><use href="/static/icons.svg#i-x-circle"/></svg></span></div>
+      <div class="tile-val num" id="sum-crit">&ndash;</div>
+      <div class="tile-note" id="sum-crit-note">&nbsp;</div>
+    </div>
+    <div class="card tile t-warn" id="tile-warn">
+      <div class="tile-top">Warning<span class="tile-ico"><svg class="icon"><use href="/static/icons.svg#i-alert"/></svg></span></div>
+      <div class="tile-val num" id="sum-warn">&ndash;</div>
+      <div class="tile-note" id="sum-warn-note">&nbsp;</div>
+    </div>
+    <div class="card tile t-ok">
+      <div class="tile-top">Healthy<span class="tile-ico"><svg class="icon"><use href="/static/icons.svg#i-check"/></svg></span></div>
+      <div class="tile-val num" id="sum-ok">&ndash;</div>
+      <div class="tile-note" id="sum-ok-note">&nbsp;</div>
+    </div>
+    <div class="card tile">
+      <div class="tile-top">Monitors live<span class="tile-ico"><svg class="icon"><use href="/static/icons.svg#i-pulse"/></svg></span></div>
+      <div class="tile-val num" id="sum-live">&ndash;</div>
+      <div class="mon-pills">
+        <span id="mon-process" class="mon-item"><span class="mon-dot"></span>Process</span>
+        <span id="mon-perf" class="mon-item"><span class="mon-dot"></span>Performance</span>
+        <span id="mon-disk" class="mon-item"><span class="mon-dot"></span>Disk</span>
+        <span id="mon-net" class="mon-item"><span class="mon-dot"></span>Network</span>
+        <span id="mon-doc" class="mon-item"><span class="mon-dot"></span>Document</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="board">
+    <section class="card mon-card" id="card-process">
+      <div class="card-head" id="head-process">
+        <div class="card-title"><span class="card-ico"><svg class="icon icon-lg"><use href="/static/icons.svg#i-process"/></svg></span>
+          <div><div class="card-name">Processes</div><div class="card-meta" id="meta-process">&nbsp;</div></div></div>
+        <div class="card-ctrl" id="ctrl-process"></div>
+      </div>
+      <div class="card-body" id="proc-list"><div class="empty">Loading&hellip;</div></div>
+    </section>
+    <section class="card mon-card" id="card-performance">
+      <div class="card-head" id="head-performance">
+        <div class="card-title"><span class="card-ico"><svg class="icon icon-lg"><use href="/static/icons.svg#i-cpu"/></svg></span>
+          <div><div class="card-name">Performance</div><div class="card-meta" id="meta-performance">&nbsp;</div></div></div>
+        <div class="card-ctrl" id="ctrl-performance"></div>
+      </div>
+      <div class="card-body" id="perf-list"><div class="empty">Loading&hellip;</div></div>
+    </section>
+    <section class="card mon-card" id="card-network">
+      <div class="card-head" id="head-network">
+        <div class="card-title"><span class="card-ico"><svg class="icon icon-lg"><use href="/static/icons.svg#i-network"/></svg></span>
+          <div><div class="card-name">Network</div><div class="card-meta" id="meta-network">&nbsp;</div></div></div>
+        <div class="card-ctrl" id="ctrl-network"></div>
+      </div>
+      <div class="card-body" id="net-list"><div class="empty">Loading&hellip;</div></div>
+    </section>
+    <section class="card mon-card" id="card-disk">
+      <div class="card-head" id="head-disk">
+        <div class="card-title"><span class="card-ico"><svg class="icon icon-lg"><use href="/static/icons.svg#i-disk"/></svg></span>
+          <div><div class="card-name">Disk</div><div class="card-meta" id="meta-disk">&nbsp;</div></div></div>
+        <div class="card-ctrl" id="ctrl-disk"></div>
+      </div>
+      <div class="card-body" id="disk-list"><div class="empty">Loading&hellip;</div></div>
+    </section>
+    <section class="card mon-card" id="card-document">
+      <div class="card-head" id="head-document">
+        <div class="card-title"><span class="card-ico"><svg class="icon icon-lg"><use href="/static/icons.svg#i-document"/></svg></span>
+          <div><div class="card-name">Document</div><div class="card-meta" id="meta-document">&nbsp;</div></div></div>
+        <div class="card-ctrl" id="ctrl-document"></div>
+      </div>
+      <div class="card-body" id="doc-list"><div class="empty">Loading&hellip;</div></div>
+    </section>
+  </div>
+</main>
+
+<footer class="footer">
+  <span id="footer-lbl">Last refresh: &ndash;</span>
+  <span class="cd">Auto-refresh in <span class="num" id="cd-num">10</span>s<span class="cd-bar"><span class="cd-fill" id="cd-fill" style="display:block;width:100%"></span></span></span>
+</footer>
+
+<!-- Details: every monitor's configuration -->
+<div class="scrim" id="det-ov" onclick="if(event.target===this)closeDet()">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="det-title" style="max-width:760px">
+    <div class="dialog-head">
+      <div><div class="dialog-title" id="det-title">Monitoring configuration</div>
+        <div class="dialog-sub">What each monitor watches, its thresholds, and the actions they run.</div></div>
+      <button class="btn btn-ghost btn-icon" onclick="closeDet()" aria-label="Close"><svg class="icon"><use href="/static/icons.svg#i-close"/></svg></button>
+    </div>
+    <div class="tabs" id="det-tabs" role="tablist"></div>
+    <div class="det-body" id="det-body"></div>
+  </div>
+</div>
+
+<!-- Runbook for a process that is not running -->
+<div class="scrim" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="m-title" style="max-width:480px">
+    <div class="dialog-head">
+      <div><div class="dialog-title" id="m-title">Process not running</div><div class="dialog-sub" id="m-exe"></div></div>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal()" aria-label="Close"><svg class="icon"><use href="/static/icons.svg#i-close"/></svg></button>
+    </div>
+    <div class="dialog-body">
+      <dl class="kv">
+        <dt>Status</dt><dd><span class="badge b-crit">Not running</span></dd>
+        <dt id="m-down-lbl">Down since</dt><dd id="m-down">&ndash;</dd>
+        <dt>Alerts logged</dt><dd id="m-alerts" class="num">0</dd>
+        <dt id="m-act-lbl">Actions</dt><dd id="m-act"><div class="chips" id="m-chips"></div></dd>
+      </dl>
+      <div class="runbook"><div class="runbook-title"><svg class="icon"><use href="/static/icons.svg#i-runbook"/></svg>Runbook</div><div id="m-note"></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="tt-box" role="tooltip"></div>
+
+<script>
+const REFRESH = 10;
+const SPRITE = '/static/icons.svg';
+const KEY_TO_BODY = {process:'proc-list', performance:'perf-list', disk:'disk-list', network:'net-list', document:'doc-list'};
+const MONITOR_LABEL = {process:'Processes', performance:'Performance', disk:'Disk', network:'Network', document:'Document'};
+const ACT_ICON = {popup:'bell', log_to_file:'log', email_draft:'mail', run_script:'terminal'};
+const ACT_LABEL = {popup:'Popup', log_to_file:'Log', email_draft:'Email draft', run_script:'Run script'};
+let cdTimer, cdVal = REFRESH;
+const pendingStop = new Set();
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ico(name, cls){ return `<svg class="icon ${cls||''}" aria-hidden="true"><use href="${SPRITE}#i-${name}"/></svg>`; }
+function fmtDur(sec){
+  if(sec==null||sec<0) return '–';
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
+  if(h>0) return h+'h '+m+'m'; if(m>0) return m+'m '+s+'s'; return s+'s';
+}
+function lvlOf(l){ l=(l||'ok').toLowerCase(); return ['ok','warning','critical','unknown'].includes(l)?l:'ok'; }
+function badge(lvl, text){
+  const cls={ok:'b-ok', warning:'b-warn', critical:'b-crit', unknown:'b-unk'}[lvl];
+  const label=text||{ok:'OK', warning:'Warning', critical:'Critical', unknown:'Unknown'}[lvl];
+  return `<span class="badge ${cls}">${esc(label)}</span>`;
+}
+function infoBtn(ttid, name){
+  return `<button class="info-btn" data-ttid="${ttid}" aria-label="Details for ${esc(name)}">${ico('info')}</button>`;
+}
+function meter(pct, lvl, ticks, label){
+  const w=Math.max(0, Math.min(100, pct||0));
+  const t=(ticks||[]).filter(x=>x.at>0&&x.at<=100).map(x=>`<i class="tick t-${x.level}" style="left:${x.at}%" title="${esc(x.level)} at ${x.at}%"></i>`).join('');
+  return `<div class="meter" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(w)}"><div class="meter-fill lvl-${lvl}" style="width:${w}%"></div>${t}</div>`;
+}
+function row(lvl, title, ttid, sub, metric, right, extraCls){
+  return `<div class="row lvl-${lvl} fade-in">
+  <div class="row-main"><div class="row-title"><span>${esc(title)}</span>${ttid?infoBtn(ttid,title):''}</div>
+    <div class="row-sub ${extraCls||''}">${sub}</div></div>
+  ${metric?`<div class="row-metric">${metric}</div>`:''}
+  <div class="row-badge">${right}</div>
+</div>`;
+}
+function empty(msg){ return `<div class="empty">${ico('info')}<span>${msg}</span></div>`; }
+
+// ── Tooltips: hover or keyboard focus on an info button ─────────────────────
+const _ttBox = document.getElementById('tt-box');
+const _ttCache = {};
+const _procCache = [];
+function _showTt(el, x, y){
+  const html=_ttCache[el.dataset.ttid]; if(!html){ _hideTt(); return; }
+  _ttBox.innerHTML=html; _ttBox.style.display='block'; _posTt(x, y);
+}
+function _hideTt(){ _ttBox.style.display='none'; }
+function _posTt(cx, cy){
+  const pad=14, w=_ttBox.offsetWidth, h=_ttBox.offsetHeight;
+  let x=cx+pad, y=cy+pad;
+  if(x+w>window.innerWidth-8) x=Math.max(8, cx-w-pad);
+  if(y+h>window.innerHeight-8) y=Math.max(8, cy-h-pad);
+  _ttBox.style.left=x+'px'; _ttBox.style.top=y+'px';
+}
+document.addEventListener('mouseover', e=>{ const el=e.target.closest('[data-ttid]'); if(el) _showTt(el, e.clientX, e.clientY); });
+document.addEventListener('mousemove', e=>{ if(_ttBox.style.display==='none') return; if(!e.target.closest('[data-ttid]')) _hideTt(); else _posTt(e.clientX, e.clientY); });
+document.addEventListener('focusin', e=>{ const el=e.target.closest('[data-ttid]'); if(!el) return; const r=el.getBoundingClientRect(); _showTt(el, r.right, r.bottom); });
+document.addEventListener('focusout', e=>{ if(e.target.closest('[data-ttid]')) _hideTt(); });
+
+function _actIcons(types){ return (types||[]).map(t=>`<span title="${esc(ACT_LABEL[t]||t)}">${ico(ACT_ICON[t]||'info')}</span>`).join(''); }
+function _ttThresh(thresholds, type){
+  return (thresholds||[]).map(t=>{
+    let cond='';
+    if(type==='perf') cond=`&ge; ${t.percent}% for ${t.sustain_sec}s`;
+    else if(type==='disk') cond=`&ge; ${t.percent_used}% used`;
+    else if(type==='net') cond=t.condition==='unreachable'?'Unreachable':(t.latency_ms?`Latency &ge; ${t.latency_ms} ms`:'');
+    else if(type==='doc') cond=_docRule(t);
+    return `<div class="tt-thresh"><span class="tt-lvl ${esc(t.level)}">${esc((t.level||'').toUpperCase())}</span><span>${cond}</span><span class="tt-acts">${_actIcons((t.actions||[]).map(a=>a.type))}</span></div>`;
+  }).join('');
+}
+function _ttPerf(m, cfg){
+  const cur=m.current_value!=null?`Current: <b>${Math.round(m.current_value)}%</b>`:'No reading yet';
+  return `<div class="tt-title">${esc(m.display_name)}</div><div class="tt-meta">Checked every ${(cfg||{}).check_interval_sec||5}s</div>`+
+    `<div class="tt-cur">${cur}</div><div class="tt-hr"></div>`+_ttThresh((cfg||{}).thresholds,'perf');
+}
+function _ttDisk(m, cfg){
+  const cur=m.percent_used!=null?`Current: <b>${Math.round(m.percent_used)}%</b> used &middot; <b>${m.free_gb} GB</b> free`:'Drive unavailable';
+  return `<div class="tt-title">${esc(m.display_name)}</div><div class="tt-meta">Drive ${esc(m.drive)} &middot; checked every ${(cfg||{}).check_interval_sec||60}s</div>`+
+    `<div class="tt-cur">${cur}</div><div class="tt-hr"></div>`+_ttThresh((cfg||{}).thresholds,'disk');
+}
+function _ttNet(m, cfg){
+  const lat=m.latency_ms!=null?` &middot; <b>${m.latency_ms} ms</b>`:'';
+  return `<div class="tt-title">${esc(m.name)}</div>`+
+    `<div class="tt-meta">${esc(m.host)}${m.port?':'+m.port:''} &middot; ${esc((m.protocol||'').toUpperCase())} &middot; every ${(cfg||{}).check_interval_sec||30}s &middot; timeout ${(cfg||{}).timeout_sec||5}s</div>`+
+    `<div class="tt-cur">Status: <b>${m.reachable?'Online':'Offline'}</b>${lat}</div><div class="tt-hr"></div>`+_ttThresh((cfg||{}).thresholds,'net');
+}
+function _ttProc(p){
+  const instr=p.instructions?`<div class="tt-hr"></div><div class="tt-instr">${esc(p.instructions.substring(0,240))}</div>`:'';
+  return `<div class="tt-title">${esc(p.display_name)}</div>`+
+    `<div class="tt-meta">${esc(p.name)} &middot; ${p.required?'Required':'Optional'} &middot; checked every ${p.check_sec}s</div>`+
+    `<div class="tt-cur">When it stops: <span class="tt-acts">${_actIcons(p.actions)||'&ndash;'}</span></div>${instr}`;
+}
+function _docRule(t){ return `${t.condition==='below'?'Below':'Above'} <b>${t.percent_of_target}%</b> of target`; }
+function _ttDoc(ds, cfg){
+  const c=cfg||{}, u=ds.unit||'';
+  const cur=ds.error?`<span style="color:var(--crit-fill)">Error: ${esc(ds.error)}</span>`
+    :`Current: <b>${esc(u)}${Number(ds.total||0).toFixed(2)}</b> (${ds.percent_of_target}% of ${esc(u)}${ds.target})`;
+  return `<div class="tt-title">${esc(ds.display_name||'Document')}</div>`+
+    `<div class="tt-meta">${esc(c.path||ds.path||'')}<br>Sum of ${esc(c.value_column||'')} where ${esc(c.filter_column||'')} = ${esc(c.filter_value||'')} &middot; every ${c.check_interval_sec||60}s</div>`+
+    `<div class="tt-cur">${cur}</div><div class="tt-hr"></div>`+_ttThresh(c.thresholds,'doc');
+}
+
+// ── Render ──────────────────────────────────────────────────────────────────
+function render(d){
+  _detData = d;
+  document.getElementById('ver').textContent = 'v'+d.version;
+  document.getElementById('refresh-lbl').textContent = 'Live · refreshed '+d.server_time;
+  document.getElementById('footer-lbl').textContent = 'Last refresh: '+d.server_time;
+
+  const mons=(d.engine||{}).monitors||{};
+  const monIds={process:'mon-process', performance:'mon-perf', disk:'mon-disk', network:'mon-net', document:'mon-doc'};
+  Object.entries(monIds).forEach(([k,id])=>{ const el=document.getElementById(id); if(el) el.className='mon-item'+(mons[k]?' mon-active':''); });
+  const liveCount=Object.values(mons).filter(Boolean).length;
+  document.getElementById('pdot').className='live-dot'+(liveCount?' on':'');
+  document.getElementById('sum-live').textContent=`${liveCount}/${Object.keys(monIds).length}`;
+
+  // card header: pause / resume
+  Object.keys(monIds).forEach(key=>{
+    const active=!!mons[key];
+    const card=document.getElementById('card-'+key), ctrl=document.getElementById('ctrl-'+key);
+    if(!card||!ctrl) return;
+    card.classList.toggle('paused', !active);
+    if(active){
+      ctrl.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="ctrlMonitor('stop','${key}')" title="Stop this monitor's background script">${ico('pause')}Pause</button>`;
+    } else {
+      ctrl.innerHTML=`<span class="badge b-unk b-plain">Paused</span><button class="btn btn-primary btn-sm" onclick="ctrlMonitor('start','${key}')">${ico('play')}Resume</button>`;
+      pendingStop.delete(key);
+    }
+  });
+
+  const cfg=d.config||{};
+  const levels=[];            // every item's level, for the overview tiles
+  const names={critical:[], warning:[]};
+  const note=(lvl, name)=>{ levels.push(lvl); if(names[lvl]) names[lvl].push(name); };
+
+  // processes
+  const pl=document.getElementById('proc-list');
+  const procs=d.processes||[];
+  document.getElementById('meta-process').textContent=procs.length?`${d.running_count} of ${procs.length} running`:'';
+  if(!procs.length) pl.innerHTML=empty('No processes configured.');
+  else pl.innerHTML=procs.map((p,i)=>{
+    const run=p.is_running===true, unk=p.is_running===null;
+    const lvl=run?'ok':unk?'unknown':'critical';
+    if(mons.process) note(lvl, p.display_name);
+    const sub=esc(p.name)+' &middot; '+(p.required?'Required':'Optional')+' &middot; '+
+      (run?(p.last_check?'checked '+esc(p.last_check.slice(11)):'running'):p.down_since?'down '+fmtDur(p.down_sec)+' &middot; '+p.alert_count+(p.alert_count===1?' alert':' alerts'):'not detected');
+    const ttid=`proc-${i}`; _ttCache[ttid]=_ttProc(p);
+    _procCache[i]=p;
+    const right=run?badge('ok','Running'):unk?badge('unknown'):
+      `<button class="btn btn-sm" onclick="showModal(_procCache[${i}])">${ico('runbook')}Runbook</button>`;
+    return row(lvl, p.display_name, ttid, sub, run||unk?'':badge('critical','Not running'), right);
+  }).join('');
+
+  // performance
+  const pfl=document.getElementById('perf-list');
+  const perf=d.performance||[];
+  document.getElementById('meta-performance').textContent=perf.length?'CPU and memory, sustained thresholds':'';
+  if(!perf.length) pfl.innerHTML=empty('No data yet. Start <code>performance_monitor.ps1</code>.');
+  else pfl.innerHTML=perf.map((m,i)=>{
+    const lvl=lvlOf(m.current_level); if(mons.performance) note(lvl, m.display_name);
+    const c=(cfg.performance||{})[m.name]||{};
+    const ticks=(c.thresholds||[]).map(t=>({at:t.percent, level:t.level}));
+    const val=m.current_value!=null?Math.round(m.current_value):null;
+    const ttid=`perf-${i}`; _ttCache[ttid]=_ttPerf(m,c);
+    const metric=`<div class="metric-val">${val!=null?val+'%':'–'}</div>${meter(val,lvl,ticks,m.display_name+' '+(val??'')+'%')}`;
+    return row(lvl, m.display_name, ttid, 'checked '+esc((m.last_check||'').slice(11)||'–'), metric, badge(lvl));
+  }).join('');
+
+  // disk
+  const dkl=document.getElementById('disk-list');
+  const disks=d.disks||[];
+  document.getElementById('meta-disk').textContent=disks.length?`${disks.length} drive${disks.length>1?'s':''}`:'';
+  if(!disks.length) dkl.innerHTML=empty('No data yet. Start <code>monitor_disk.ps1</code>.');
+  else dkl.innerHTML=disks.map((m,i)=>{
+    const lvl=lvlOf(m.current_level); if(mons.disk) note(lvl, m.display_name);
+    const c=(cfg.disk||[]).find(x=>x.drive===m.drive)||{};
+    const ticks=(c.thresholds||[]).map(t=>({at:t.percent_used, level:t.level}));
+    const val=m.percent_used!=null?Math.round(m.percent_used):null;
+    const ttid=`disk-${i}`; _ttCache[ttid]=_ttDisk(m,c);
+    const sub=m.free_gb!=null?`${esc(m.drive)} &middot; ${m.free_gb} GB free`:`${esc(m.drive)} &middot; unavailable`;
+    const metric=val!=null?`<div class="metric-val">${val}%</div>${meter(val,lvl,ticks,m.display_name+' '+val+'% used')}`:'<div class="metric-val muted">–</div>';
+    return row(lvl, m.display_name, ttid, sub, metric, badge(lvl));
+  }).join('');
+
+  // network: one badge; reachability and latency go in the subtitle
+  const ntl=document.getElementById('net-list');
+  const nets=d.network||[];
+  document.getElementById('meta-network').textContent=nets.length?`${nets.filter(n=>n.reachable).length} of ${nets.length} reachable`:'';
+  if(!nets.length) ntl.innerHTML=empty('No data yet. Start <code>monitor_network.ps1</code>.');
+  else ntl.innerHTML=nets.map((m,i)=>{
+    const lvl=lvlOf(m.current_level); if(mons.network) note(lvl, m.name);
+    const c=(cfg.network||[]).find(x=>x.name===m.name)||{};
+    const ttid=`net-${i}`; _ttCache[ttid]=_ttNet(m,c);
+    const sub=`${esc(m.host)}${m.port?':'+m.port:''} &middot; ${esc((m.protocol||'').toUpperCase())} &middot; ${m.reachable?'online':'<b>offline</b>'}`;
+    const metric=m.reachable&&m.latency_ms!=null?`<div class="metric-val">${m.latency_ms}<span class="muted" style="font-size:12px;font-weight:600"> ms</span></div>`:'';
+    return row(lvl, m.name, ttid, sub, metric, badge(lvl));
+  }).join('');
+
+  // document (CSV / Excel): the level comes from the monitor's thresholds
+  const dl=document.getElementById('doc-list');
+  const docCfg=cfg.document||{};
+  document.getElementById('meta-document').textContent=docCfg.path?docCfg.path.split(/[\\/]/).pop():'';
+  if(!d.document) dl.innerHTML=empty('No data yet. Start <code>monitor_document.ps1</code>.');
+  else {
+    const ds=d.document, ttid='doc-0'; _ttCache[ttid]=_ttDoc(ds,docCfg);
+    if(ds.error){
+      if(mons.document) note('critical', ds.display_name||'Document');
+      dl.innerHTML=row('critical', ds.display_name||'Document', ttid, esc(ds.error), '', badge('critical','Data error'), 'err');
+    } else {
+      const u=ds.unit||'', lvl=lvlOf(ds.current_level);
+      if(mons.document) note(lvl, ds.display_name||'Document');
+      const total=Number(ds.total||0), pct=Number(ds.percent_of_target||0);
+      // the meter shows 0-100 % of the target; ticks mark the thresholds
+      const ticks=(docCfg.thresholds||[]).map(t=>({at:t.percent_of_target, level:t.level}));
+      const metric=`<div class="metric-val">${esc(u)}${total.toFixed(2)}</div>${meter(pct,lvl,ticks,'Total '+pct+'% of target')}<div class="metric-note">${pct}% of ${esc(u)}${Number(ds.target||0).toFixed(0)}</div>`;
+      dl.innerHTML=row(lvl, ds.display_name||'Document', ttid, 'updated '+esc((ds.updated||'').slice(11)), metric, badge(lvl));
+    }
+  }
+
+  // overview tiles
+  const count=l=>levels.filter(x=>x===l).length;
+  const setTile=(id, n, list, tile)=>{
+    document.getElementById(id).textContent=n;
+    document.getElementById(id+'-note').textContent=list?(list.slice(0,3).join(', ')+(list.length>3?` +${list.length-3}`:'')||'None'):'';
+    if(tile) document.getElementById(tile).classList.toggle('has', n>0);
+  };
+  setTile('sum-crit', count('critical'), names.critical, 'tile-crit');
+  setTile('sum-warn', count('warning'), names.warning, 'tile-warn');
+  document.getElementById('sum-ok').textContent=count('ok');
+  document.getElementById('sum-ok-note').textContent=`of ${levels.length} watched item${levels.length===1?'':'s'}`;
+}
+
+function showModal(p){
+  document.getElementById('m-title').textContent=p.display_name+' is not running';
+  document.getElementById('m-exe').textContent=p.name+(p.required?' · Required':' · Optional');
+  document.getElementById('m-alerts').textContent=p.alert_count;
+  const down=document.getElementById('m-down'), downLbl=document.getElementById('m-down-lbl');
+  const showDown=!!p.down_since; down.style.display=downLbl.style.display=showDown?'':'none';
+  if(showDown) down.textContent=p.down_since+(p.down_sec!=null?'  ('+fmtDur(p.down_sec)+')':'');
+  const acts=p.actions||[], showActs=acts.length>0;
+  document.getElementById('m-act').style.display=document.getElementById('m-act-lbl').style.display=showActs?'':'none';
+  document.getElementById('m-chips').innerHTML=acts.map(a=>`<span class="chip">${ico(ACT_ICON[a]||'info')}${esc(ACT_LABEL[a]||a)}</span>`).join('');
+  document.getElementById('m-note').textContent=p.instructions||
+    (p.display_name+' ('+p.name+') is not running. Start it to clear the alert.');
+  document.getElementById('overlay').classList.add('open');
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeDet(); _hideTt(); } });
+
+async function ctrlMonitor(action, key){
+  const label=MONITOR_LABEL[key]||key;
+  if(action==='stop' && pendingStop.has(key)){
+    alert(`The ${label} monitor is already being paused. It will stop in a moment.`);
+    return;
+  }
+  const msg=action==='stop'
+    ? `Pause the ${label} monitor?\n\nIts background script stops until you resume it here or run start_monitoring.bat.`
+    : `Resume the ${label} monitor?\n\nThis starts its background script again.`;
+  if(!confirm(msg)) return;
+  if(action==='stop') pendingStop.add(key);
+  try{
+    const r=await fetch(`/api/${action}/${key}`, {method:'POST'});
+    const d=await r.json();
+    if(d.already_running){ alert(`The ${label} monitor is already running.`); fetchStatus(); }
+    else if(d.ok){ fetchStatus(); }
+    else { if(action==='stop') pendingStop.delete(key); alert(`Could not ${action} the ${label} monitor:\n${d.error||'Unknown error'}`); }
+  } catch(e){
+    if(action==='stop') pendingStop.delete(key);
+    alert(`Request failed: ${e.message}`);
+  }
+}
+
+// ── Details dialog ──────────────────────────────────────────────────────────
+let _detData=null, _detTab='settings';
+const DET_TABS=[['settings','sliders','Settings'],['processes','process','Processes'],['performance','cpu','Performance'],
+  ['disk','disk','Disk'],['network','network','Network'],['document','document','Document']];
+function showDetails(){ if(!_detData) return; _detRender(_detData); document.getElementById('det-ov').classList.add('open'); }
+function closeDet(){ document.getElementById('det-ov').classList.remove('open'); }
+function _detRender(d){
+  const cfg=d.config||{};
+  document.getElementById('det-tabs').innerHTML=DET_TABS.map(([t,i,l])=>
+    `<button class="tab${t===_detTab?' active':''}" role="tab" aria-selected="${t===_detTab}" onclick="_detSwitch('${t}')">${ico(i)}${l}</button>`).join('');
+  document.getElementById('det-body').innerHTML=DET_TABS.map(([t])=>
+    `<div class="det-sec${t===_detTab?' active':''}" id="det-sec-${t}">${_detSection(t,cfg)}</div>`).join('');
+}
+function _detSwitch(t){ _detTab=t; _detRender(_detData); }
+function _detSection(tab, cfg){
+  if(tab==='settings') return _dSettings(cfg.meta||{}, cfg.global||{});
+  if(tab==='processes') return _dProcesses(cfg.processes||[]);
+  if(tab==='performance') return _dPerformance(cfg.performance||{});
+  if(tab==='disk') return _dDisk(cfg.disk||[]);
+  if(tab==='network') return _dNetwork(cfg.network||[]);
+  if(tab==='document') return _dDocument(cfg.document);
+  return '';
+}
+function _drow(lbl,val){ return `<div class="det-row"><div class="det-lbl">${lbl}</div><div class="det-val">${val||'<span class="muted">–</span>'}</div></div>`; }
+function _code(v){ return `<code>${esc(v||'')}</code>`; }
+function _dActions(actions){
+  if(!actions||!actions.length) return '<div class="none">No actions configured</div>';
+  return actions.map(a=>{
+    const text=a.message_template||a.instructions||'';
+    const extra=text?`<div>${esc(text.substring(0,160))}${text.length>160?'…':''}</div>`:'';
+    const subj=a.subject_template?`<div>Subject: ${esc(a.subject_template)}</div>`:'';
+    const path=a.path?`<div>${esc(a.path)}</div>`:'';
+    return `<div class="det-act"><span class="chip">${ico(ACT_ICON[a.type]||'info')}${esc(ACT_LABEL[a.type]||a.type)}</span>
+  <div class="det-act-text">${a.level?`<span class="det-act-lvl ${esc(a.level)}">${esc(a.level.toUpperCase())}</span>`:''}${extra}${subj}${path}</div></div>`;
+  }).join('');
+}
+function _dThresholds(thresholds){
+  if(!thresholds||!thresholds.length) return '<div class="none">No thresholds configured</div>';
+  return thresholds.map(t=>{
+    const lvl=lvlOf(t.level);
+    const cond=t.description?esc(t.description)
+      :t.percent!=null&&t.sustain_sec!=null?`Above <b>${t.percent}%</b> for <b>${t.sustain_sec}s</b>`
+      :t.percent_used!=null?`Usage above <b>${t.percent_used}%</b>`
+      :t.latency_ms!=null?`Latency above <b>${t.latency_ms} ms</b>`
+      :t.percent_of_target!=null?_docRule(t)
+      :t.condition?esc(t.condition):'';
+    return `<div class="det-tlvl det-tlvl-${lvl}">${badge(lvl)} <span style="margin-left:6px">${cond}</span><div style="margin-top:8px">${_dActions(t.actions||[])}</div></div>`;
+  }).join('');
+}
+function _dSettings(meta, gl){
+  return `<div class="det-card"><div class="det-card-title">${ico('document')}Configuration file</div>
+  ${_drow('Version',esc(meta.version||'?'))}${_drow('Last updated',esc(meta.last_updated||'?'))}${_drow('Description',esc(meta.description||''))}</div>
+<div class="det-card"><div class="det-card-title">${ico('sliders')}Global settings</div>
+  ${_drow('Default interval',`<b>${gl.check_interval_sec||'?'}s</b>`)}${_drow('Log file',_code(gl.log_file))}
+  ${_drow('Log max size',`${gl.log_max_size_mb||'?'} MB`)}${_drow('Email recipient',esc(gl.email_recipient||''))}
+  ${_drow('Email cooldown',gl.email_cooldown_min!=null?`${gl.email_cooldown_min} min`:'60 min (default)')}
+  ${_drow('Scripts folder',_code(gl.scripts_dir))}</div>`;
+}
+function _dProcesses(procs){
+  if(!procs.length) return '<div class="none">No processes configured.</div>';
+  return procs.map(p=>`<div class="det-card"><div class="det-card-title">${ico('process')}${esc(p.display_name||p.name)} ${p.required?badge('critical','Required'):badge('unknown','Optional')}</div>
+  ${_drow('Executable',_code(p.name))}${_drow('Check interval',`<b>${p.check_interval_sec||30}s</b>`)}
+  <div class="det-thresh-hd">When it is not running</div>${_dActions((p.actions&&p.actions.on_not_running)||[])}</div>`).join('');
+}
+function _dPerformance(perf){
+  const entries=Object.entries(perf);
+  if(!entries.length) return '<div class="none">No performance monitors configured.</div>';
+  return entries.map(([key,m])=>`<div class="det-card"><div class="det-card-title">${ico(key==='memory'?'memory':'cpu')}${key==='memory'?'Memory (RAM)':'CPU'}</div>
+  ${_drow('Check interval',`<b>${m.check_interval_sec||5}s</b>`)}<div class="det-thresh-hd">Thresholds</div>${_dThresholds(m.thresholds)}</div>`).join('');
+}
+function _dDisk(disks){
+  if(!disks.length) return '<div class="none">No disk monitors configured.</div>';
+  return disks.map(d=>`<div class="det-card"><div class="det-card-title">${ico('disk')}${esc(d.display_name||d.drive)}</div>
+  ${_drow('Drive',_code(d.drive))}${_drow('Check interval',`<b>${d.check_interval_sec||60}s</b>`)}
+  <div class="det-thresh-hd">Thresholds</div>${_dThresholds(d.thresholds)}</div>`).join('');
+}
+function _dNetwork(nets){
+  if(!nets.length) return '<div class="none">No network monitors configured.</div>';
+  return nets.map(n=>`<div class="det-card"><div class="det-card-title">${ico('network')}${esc(n.name||n.host)}</div>
+  ${_drow('Target',_code(n.host+(n.port?':'+n.port:'')))}${_drow('Protocol',esc((n.protocol||'').toUpperCase()))}
+  ${_drow('Timeout',`${n.timeout_sec||5}s`)}${_drow('Check interval',`<b>${n.check_interval_sec||30}s</b>`)}
+  <div class="det-thresh-hd">Thresholds</div>${_dThresholds(n.thresholds)}</div>`).join('');
+}
+function _dDocument(doc){
+  if(!doc) return '<div class="none">No document monitor configured.</div>';
+  return `<div class="det-card"><div class="det-card-title">${ico('document')}${esc(doc.display_name||'Document')}</div>
+  ${_drow('File',_code(doc.path))}${doc.sheet_name?_drow('Sheet',esc(doc.sheet_name)):''}
+  ${_drow('Rows',`${esc(doc.filter_column||'')} = <b>${esc(doc.filter_value||'')}</b>`)}${_drow('Sum of',esc(doc.value_column||''))}
+  ${_drow('Target',`<b>${esc(doc.unit||'')}${esc(doc.target)}</b>`)}${_drow('Check interval',`<b>${doc.check_interval_sec||60}s</b>`)}
+  <div class="det-thresh-hd">Thresholds</div>${_dThresholds(doc.thresholds)}</div>`;
+}
+
+// ── Refresh loop ────────────────────────────────────────────────────────────
+async function fetchStatus(){
+  try{
+    const r=await fetch('/api/status');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    render(await r.json());
+  } catch(e){
+    document.getElementById('refresh-lbl').textContent='Console unreachable: '+e.message;
+    document.getElementById('pdot').className='live-dot';
+  }
+}
+function startCountdown(){
+  clearInterval(cdTimer); cdVal=REFRESH;
+  const fill=document.getElementById('cd-fill'), num=document.getElementById('cd-num');
+  num.textContent=cdVal;
+  fill.style.transition='none'; fill.style.width='100%'; void fill.offsetWidth;
+  fill.style.transition=`width ${REFRESH}s linear`; fill.style.width='0%';
+  cdTimer=setInterval(()=>{ num.textContent=--cdVal; if(cdVal<=0){ clearInterval(cdTimer); fetchStatus().then(startCountdown); } }, 1000);
+}
+fetchStatus().then(startCountdown);
+</script>
+</body>
+</html>
