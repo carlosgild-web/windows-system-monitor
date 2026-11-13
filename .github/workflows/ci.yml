@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lint and test (Windows PowerShell 5.1 + Python)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell   # Windows PowerShell 5.1, the runtime the monitors target
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Python unit tests
+        run: python -m unittest discover -s tests/python -v
+
+      - name: Install Pester and PSScriptAnalyzer
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+
+      - name: PSScriptAnalyzer
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path scripts -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          $results | Format-Table Severity, RuleName, ScriptName, Line -AutoSize | Out-String -Width 200
+          $errors = @($results | Where-Object Severity -eq 'Error')
+          if ($errors.Count -gt 0) { throw "$($errors.Count) PSScriptAnalyzer error(s)" }
+
+      - name: Pester tests
+        run: |
+          Import-Module Pester -MinimumVersion 5.5.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'tests/powershell'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = 'pester-results.xml'
+          Invoke-Pester -Configuration $config
+
+      - name: Doctor (config, paths, environment)
+        run: |
+          powershell.exe -ExecutionPolicy Bypass -NoProfile -File scripts/doctor.ps1 -SkipRuntime
+          if ($LASTEXITCODE -ne 0) { throw "doctor reported $LASTEXITCODE failure(s)" }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pester-results
+          path: pester-results.xml

@@ -1,0 +1,19 @@
+# Runtime output: the monitors write the log and live state files here
+logs/*
+!logs/.gitkeep
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Claude Code session files
+.claude/
+
+# Windows / Office
+Thumbs.db
+desktop.ini
+~$*
+
+# Test output
+pester-results.xml

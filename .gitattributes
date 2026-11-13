@@ -1,0 +1,14 @@
+# Normalize text files to LF in the repository
+* text=auto
+
+# Windows-only launchers must keep CRLF on checkout (cmd.exe mis-parses
+# labels and multi-line commands in LF batch files)
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.vbs  text eol=crlf
+
+# Binary files
+*.xlsx binary
+*.png  binary
+*.gif  binary
+*.pdf  binary
