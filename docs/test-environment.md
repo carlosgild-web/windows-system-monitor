@@ -20,7 +20,7 @@ Start everything with `start_monitoring.bat`, open the console at <http://localh
 | Network | Cloudflare DNS `1.1.1.1` (ping) | Online | Disconnect from the network |
 | Network | Google DNS `8.8.8.8` (TCP 53) | Online | Disconnect from the network |
 | Network | Monitoring console `localhost:5758` | Online while the console runs | Close the console |
-| Network | Settings editor `localhost:5757` | **Warning until you open the editor** | `start_editor.bat` / close it |
+| Network | Settings editor `localhost:5757` | **Warning until you open the editor** | **Open Monitoring settings** in the console |
 | Document | `sample_data/monthly_budget_sample.csv`: Groceries vs a $400 budget | **Warning** ($340.15 = 85 %) | Edit an amount in the CSV |
 
 So a fresh start shows a few deliberate non-green rows: Notepad (not running), the settings editor (closed) and the
@@ -54,8 +54,9 @@ alert fires on the next check (every 60 s).
 
 ### Network: the settings editor
 
-1. Run `start_editor.bat`. Within 30 s the **Settings Editor (demo)** row turns green.
-2. Close the editor's window. The row goes back to *warning* and the log gets
+1. Click **Open Monitoring settings** in the console's demo banner (or run `start_editor.bat`). Within 30 s the
+   **Settings Editor (demo)** row turns green.
+2. Stop the editor: run `stop_monitoring.bat`, or close the `start_editor.bat` window if you started it that way. The row goes back to *warning* and the log gets
    `WARNING SVC: settings editor on localhost:5757 is not running (demo)`.
 
 To see a **critical** network alert, disconnect from Wi-Fi: both DNS rows go red and `on_network_down.ps1` runs.

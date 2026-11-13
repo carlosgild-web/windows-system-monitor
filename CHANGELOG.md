@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- A **portfolio demo banner** on the console: what the project is, a "How this demo works" panel (what it is, how
+  the pieces fit, things to try) and an **Open Monitoring settings** button that starts the settings editor in the
+  background if needed (`POST /api/open-editor`, same-origin only) and opens it in a new tab. The banner can be
+  collapsed to a "Demo guide" pill. `stop_monitoring.bat` also stops an editor started this way.
 - A generic **document monitor** replaces Ebook Sales: it sums a filtered column of a `.csv` (no Excel needed) or
   `.xlsx` file and alerts when the total goes `above` or `below` a percent of a target, with the same actions,
   hysteresis and email cooldown as the other monitors. The default watches a made-up monthly budget CSV.

@@ -142,6 +142,52 @@ body { min-height: 100vh; display: flex; flex-direction: column; }
 .det-act-lvl.warning { color: var(--warn); }
 .none { font-size: 12px; color: var(--text-3); padding: 4px 0; }
 
+/* ---- portfolio demo guide: deliberately outside the app's own design (neutral charcoal,
+        dashed edge, monospace tag) so nobody mistakes it for part of the product ---- */
+.guide { --g-bg: #1b2028; --g-text: #e8ebf0; --g-muted: #a7afbd; --g-edge: #4b5466; --g-hover: rgba(255,255,255,.08); }
+.guide-bar { background: var(--g-bg); color: var(--g-text); border-bottom: 1px dashed var(--g-edge); }
+.guide-inner { max-width: 1440px; margin: 0 auto; display: flex; align-items: flex-start; gap: 14px; padding: 12px 20px; }
+.guide-ico { margin-top: 2px; color: var(--g-muted); }
+.guide-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.guide-tag { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--g-muted); }
+.guide-text { font-size: 13.5px; line-height: 1.5; max-width: 860px; }
+.guide-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.guide .gbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--g-edge); background: transparent; color: var(--g-text); font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
+.guide .gbtn:hover { background: var(--g-hover); }
+.guide .gbtn.solid { background: var(--g-text); border-color: var(--g-text); color: var(--g-bg); }
+.guide .gbtn.solid:hover { background: #fff; }
+.guide .gbtn:disabled { opacity: .7; cursor: progress; }
+.guide .gclose { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--g-muted); cursor: pointer; }
+.guide .gclose:hover { background: var(--g-hover); color: var(--g-text); }
+.guide-pill { position: fixed; left: 16px; bottom: 56px; z-index: 60; display: none; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px dashed var(--g-edge); background: var(--g-bg); color: var(--g-text); font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow-lg); }
+body.guide-hidden .guide-bar { display: none; }
+body.guide-hidden .guide-pill { display: inline-flex; }
+
+.drawer-scrim { position: fixed; inset: 0; z-index: 300; display: none; justify-content: flex-end; background: var(--scrim); }
+.drawer-scrim.open { display: flex; }
+.drawer { width: min(460px, 100%); height: 100%; display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--shadow-lg); animation: slide .2s ease; }
+@keyframes slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
+.drawer-body { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 22px; font-size: 13.5px; line-height: 1.6; }
+.drawer-body h3 { font-size: 14px; font-weight: 650; margin-bottom: 6px; }
+.drawer-body p { color: var(--text-2); }
+.drawer-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+.drawer-foot a { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); text-decoration: none; }
+.drawer-foot a:hover { color: var(--text); text-decoration: underline; }
+.drawer-tag { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); margin-bottom: 4px; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.step { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.step.here { border-color: var(--accent); background: var(--accent-weak); }
+.step-n { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; background: var(--surface-3); color: var(--text-2); font-size: 12px; font-weight: 700; }
+.step.here .step-n { background: var(--accent); color: var(--accent-text); }
+.step-title { font-weight: 650; }
+.here-tag { margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: var(--accent-text); font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; vertical-align: 1px; }
+.tries { margin: 0; padding-left: 18px; color: var(--text-2); display: flex; flex-direction: column; gap: 6px; }
+.tries code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+#notice { position: fixed; right: 20px; bottom: 56px; z-index: 400; max-width: 420px; padding: 10px 14px; border-radius: 10px; background: var(--tooltip-bg); color: var(--tooltip-text); font-size: 13px; box-shadow: var(--shadow-lg); opacity: 0; transform: translateY(6px); transition: opacity .2s, transform .2s; pointer-events: none; }
+#notice.show { opacity: 1; transform: none; }
+
 /* ---- small screens ---- */
 @media (max-width: 900px) {
   .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -177,6 +223,24 @@ body { min-height: 100vh; display: flex; flex-direction: column; }
     <button class="btn btn-ghost btn-icon" data-theme-toggle><svg class="icon"><use href="/static/icons.svg#i-monitor"/></svg></button>
   </div>
 </header>
+
+<div class="guide guide-bar" role="region" aria-label="Demo guide">
+  <div class="guide-inner">
+    <svg class="icon icon-lg guide-ico" aria-hidden="true"><use href="/static/icons.svg#i-runbook"/></svg>
+    <div class="guide-main">
+      <span class="guide-tag">Portfolio demo &middot; Windows System Monitor</span>
+      <p class="guide-text">This is a live demo of a Windows monitoring toolkit. Five PowerShell monitors watch this
+        computer and act on what they find. This console shows what they see, and the settings editor changes what
+        they watch.</p>
+      <div class="guide-actions">
+        <button class="gbtn" onclick="openGuide()">How this demo works</button>
+        <button class="gbtn solid" id="btn-open-editor" onclick="openEditor(this)"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-sliders"/></svg>Open Monitoring settings</button>
+      </div>
+    </div>
+    <button class="gclose" onclick="setGuide('pill')" title="Hide the demo guide" aria-label="Hide the demo guide"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-close"/></svg></button>
+  </div>
+</div>
+<button class="guide guide-pill" onclick="setGuide('open'); openGuide()"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-runbook"/></svg>Demo guide</button>
 
 <main class="page">
   <section class="overview" aria-label="Overview">
@@ -289,6 +353,55 @@ body { min-height: 100vh; display: flex; flex-direction: column; }
   </div>
 </div>
 
+<!-- "How this demo works": for anyone reviewing the project -->
+<div class="drawer-scrim" id="guide-ov" onclick="if(event.target===this)closeGuide()">
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+    <div class="drawer-head">
+      <div><div class="drawer-tag">Portfolio demo</div><div class="dialog-title" id="guide-title">How this demo works</div>
+        <div class="dialog-sub">For anyone reviewing the project. Everything runs on this computer; nothing is sent anywhere.</div></div>
+      <button class="btn btn-ghost btn-icon" onclick="closeGuide()" aria-label="Close"><svg class="icon"><use href="/static/icons.svg#i-close"/></svg></button>
+    </div>
+    <div class="drawer-body">
+      <section>
+        <h3>What this is</h3>
+        <p>A monitoring and auto-remediation toolkit for Windows, driven by one JSON file. Five PowerShell monitors
+          (processes, CPU and memory, disks, network, and a number in a CSV or Excel file) check this machine on their
+          own schedules. When a threshold is crossed they act: a log line, a desktop popup, an email draft, or a
+          remediation script.</p>
+      </section>
+      <section>
+        <h3>How it fits together</h3>
+        <ol class="steps">
+          <li class="step"><span class="step-n">1</span><div><div class="step-title">Settings editor &rarr; one JSON file</div>
+            <p>Every monitor, threshold and action lives in <code>monitoring_settings.json</code>. A health check
+            (<code>doctor.bat</code>) validates it before anything starts.</p></div></li>
+          <li class="step"><span class="step-n">2</span><div><div class="step-title">Monitors &rarr; actions</div>
+            <p>Each monitor runs in its own hidden PowerShell process. A problem that lingers is one incident: one popup,
+            at most one email draft per hour, while logging and remediation keep going.</p></div></li>
+          <li class="step here" aria-current="step"><span class="step-n">3</span><div><div class="step-title">State files &rarr; this console<span class="here-tag">You are here</span></div>
+            <p>Monitors write their state every cycle and the console reads it every 10 seconds. A monitor whose state
+            stops updating is shown as down, so a stuck monitor can't look healthy.</p></div></li>
+        </ol>
+      </section>
+      <section>
+        <h3>Things to try</h3>
+        <ul class="tries">
+          <li>Open <b>Notepad</b>, then close it. Its row turns green, then red, and the log records both.</li>
+          <li>Click <b>Open Monitoring settings</b>. The <i>Settings Editor (demo)</i> row under Network turns green within 30 seconds.</li>
+          <li>In <code>sample_data/monthly_budget_sample.csv</code>, change the last Groceries amount from 22.00 to 90.00 and save. The budget turns critical.</li>
+          <li>Pause a monitor here, then run <code>doctor.bat</code>. It reports that monitor as not running.</li>
+          <li>Hover or tab to an <b>&#9432;</b> icon to see that item's thresholds and actions.</li>
+        </ul>
+      </section>
+    </div>
+    <div class="drawer-foot">
+      <a href="https://github.com/carlosgild-web/windows-system-monitor/blob/master/docs/test-environment.md" target="_blank" rel="noreferrer"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-runbook"/></svg>Step-by-step test guide</a>
+      <a href="https://github.com/carlosgild-web/windows-system-monitor#readme" target="_blank" rel="noreferrer"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-external"/></svg>The project on GitHub</a>
+    </div>
+  </aside>
+</div>
+
+<div id="notice" role="status" aria-live="polite"></div>
 <div id="tt-box" role="tooltip"></div>
 
 <script>
@@ -554,7 +667,44 @@ function closeDialog(id){
   _returnFocus=null;
 }
 function closeModal(){ closeDialog('overlay'); }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeDet(); _hideTt(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeDet(); closeGuide(); _hideTt(); } });
+
+// ── Portfolio demo guide ────────────────────────────────────────────────────
+// Banner or pill, remembered in this browser (a convenience: when storage is blocked the banner just shows).
+const GUIDE_KEY='wsm-demo-guide';
+function setGuide(mode){
+  document.body.classList.toggle('guide-hidden', mode==='pill');
+  try{ localStorage.setItem(GUIDE_KEY, mode); }catch(e){ /* not remembered */ }
+}
+try{ if(localStorage.getItem(GUIDE_KEY)==='pill') document.body.classList.add('guide-hidden'); }catch(e){}
+function openGuide(){ openDialog('guide-ov'); }
+function closeGuide(){ closeDialog('guide-ov'); }
+
+let _noticeTimer;
+function notice(msg, ms){
+  const n=document.getElementById('notice'); n.textContent=msg; n.classList.add('show');
+  clearTimeout(_noticeTimer); _noticeTimer=setTimeout(()=>n.classList.remove('show'), ms||5000);
+}
+
+// "Open Monitoring settings": the console starts the editor if needed, then the page opens it.
+// The tab is opened inside the click so popup blockers allow it, and pointed at the editor once it answers.
+async function openEditor(btn){
+  const tab=window.open('about:blank', '_blank');
+  const label=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML=ico('refresh')+'Starting the editor&hellip;';
+  try{
+    const r=await fetch('/api/open-editor', {method:'POST'});
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error||'Unknown error');
+    if(tab) tab.location.href=d.url; else window.open(d.url, '_blank');
+    if(!d.already_running) notice('Settings editor started. Watch the Settings Editor (demo) row under Network turn green.');
+  } catch(e){
+    if(tab) tab.close();
+    notice('Could not open the settings editor: '+e.message+'. Run start_editor.bat instead.', 8000);
+  } finally {
+    btn.disabled=false; btn.innerHTML=label;
+  }
+}
 
 async function ctrlMonitor(action, key){
   const label=MONITOR_LABEL[key]||key;

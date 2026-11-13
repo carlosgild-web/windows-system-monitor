@@ -24,7 +24,8 @@ live web dashboard.
   remediation. Hysteresis keeps a value hovering at a threshold to one incident, popups and emails fire once per
   incident, and an email cooldown caps drafts per alert; logging and remediation keep running while the problem lasts.
 - **Live web console.** Merges the monitors' state files with a real-time process check, lets you pause and resume
-  each monitor, and shows a runbook for each failing process.
+  each monitor, and shows a runbook for each failing process. Light and dark themes, and a built-in demo guide
+  ("How this demo works") for anyone trying it out.
 - **Self-diagnosing.** `doctor.bat` checks the environment, config schema, paths and running monitors. The launcher
   runs the same checks before starting anything, so a bad config fails loudly instead of silently.
 - **Tested.** 100+ Pester tests and a Python test suite, run on Windows PowerShell 5.1 in GitHub Actions.

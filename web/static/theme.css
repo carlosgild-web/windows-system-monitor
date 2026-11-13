@@ -140,6 +140,7 @@ a { color: var(--accent); }
   font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer;
   transition: background .12s, border-color .12s, color .12s;
 }
+a.btn { text-decoration: none; }
 .btn:hover { background: var(--surface-2); }
 .btn:disabled { opacity: .55; cursor: default; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }

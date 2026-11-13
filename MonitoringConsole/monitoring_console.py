@@ -5,7 +5,10 @@ Usage: python monitoring_console.py
        Browser opens automatically at http://localhost:5758
 """
 import json
+import shutil
+import socket
 import subprocess
+import sys
 import threading
 import time
 import webbrowser
@@ -23,6 +26,8 @@ DISK_STATE_FILE = BASE / "logs" / "disk_state.json"
 NET_STATE_FILE   = BASE / "logs" / "network_state.json"
 DOC_STATE_FILE   = BASE / "logs" / "document_state.json"
 PORT          = 5758
+EDITOR_PORT   = 5757
+EDITOR_SCRIPT = BASE / "server.py"
 WEB_DIR       = BASE / "web"
 CONSOLE_HTML  = WEB_DIR / "console.html"     # the page; edited as a normal HTML file
 STATIC_DIR    = WEB_DIR / "static"           # theme, icons, images (shared with the editor)
@@ -159,6 +164,48 @@ def start_monitor(key: str) -> dict:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     _log_action(f"[{ts}] ACTION: {key} monitor ({path.stem}.ps1) STARTED by user via console.")
     return {"ok": True}
+
+
+def _port_open(port: int, timeout: float = 0.3) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def open_editor(wait_sec: float = 6.0) -> dict:
+    """Start the settings editor (server.py) in the background unless it already runs.
+
+    The page opens it in a new tab itself, so server.py gets --no-browser. It is
+    started hidden (pythonw when available) with its full path on the command
+    line, which is how stop_monitoring.ps1 finds and stops it.
+    """
+    url = f"http://localhost:{EDITOR_PORT}"
+    if _port_open(EDITOR_PORT):
+        return {"ok": True, "url": url, "already_running": True}
+    if not EDITOR_SCRIPT.exists():
+        return {"ok": False, "error": f"server.py not found in {BASE.name}"}
+    exe = sys.executable or shutil.which("pythonw") or shutil.which("python") or "python"
+    if exe.lower().endswith("python.exe"):          # prefer pythonw: no console window
+        pyw = exe[:-len("python.exe")] + "pythonw.exe"
+        exe = pyw if Path(pyw).exists() else exe
+    try:
+        subprocess.Popen(
+            [exe, str(EDITOR_SCRIPT), "--no-browser"],
+            cwd=str(BASE),
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except OSError as exc:
+        return {"ok": False, "error": f"Could not start the editor: {exc}"}
+    deadline = time.monotonic() + wait_sec
+    while time.monotonic() < deadline:
+        if _port_open(EDITOR_PORT):
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            _log_action(f"[{ts}] ACTION: settings editor STARTED by user via console.")
+            return {"ok": True, "url": url, "already_running": False}
+        time.sleep(0.25)
+    return {"ok": False, "error": f"The editor did not start listening on port {EDITOR_PORT}"}
 
 
 def _parse_dt(s):
@@ -335,7 +382,10 @@ class Handler(BaseHTTPRequestHandler):
             body = b'{"ok": false, "error": "Cross-origin request rejected"}'
             return self._send(body, "application/json; charset=utf-8", 403)
         parts = self.path.strip("/").split("/")
-        if len(parts) == 3 and parts[0] == "api" and parts[1] in ("stop", "start"):
+        if parts == ["api", "open-editor"]:
+            body = json.dumps(open_editor(), ensure_ascii=False).encode("utf-8")
+            self._send(body, "application/json; charset=utf-8")
+        elif len(parts) == 3 and parts[0] == "api" and parts[1] in ("stop", "start"):
             action, key = parts[1], parts[2]
             result = stop_monitor(key) if action == "stop" else start_monitor(key)
             body = json.dumps(result, ensure_ascii=False).encode("utf-8")
