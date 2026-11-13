@@ -20,8 +20,9 @@ live web dashboard.
 - **One source of truth.** `monitoring_settings.json` defines every monitor, threshold and response. Every other
   component reads it, and a browser-based editor writes it.
 - **Five independent monitors.** Each one runs in its own hidden PowerShell process, so a failure in one doesn't take down the others.
-- **Escalating actions with a spam guard.** `log_to_file`, desktop `popup`, `email_draft` and `run_script`
-  remediation. Popups and emails fire once per incident; logging and remediation keep running while the problem lasts.
+- **Escalating actions without alert spam.** `log_to_file`, desktop `popup`, `email_draft` and `run_script`
+  remediation. Hysteresis keeps a value hovering at a threshold to one incident, popups and emails fire once per
+  incident, and an email cooldown caps drafts per alert; logging and remediation keep running while the problem lasts.
 - **Live web console.** Merges the monitors' state files with a real-time process check, lets you pause and resume
   each monitor, and shows a runbook for each failing process.
 - **Self-diagnosing.** `doctor.bat` checks the environment, config schema, paths and running monitors. The launcher

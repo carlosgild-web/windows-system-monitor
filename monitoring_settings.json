@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "version": "1.5.0",
+    "version": "1.6.0",
     "last_updated": "2026-11-13",
     "description": "Monitoring configuration: defines what to watch, thresholds, and automated actions.",
     "update_notes": "Bump version and update last_updated whenever you change this file."
@@ -11,6 +11,7 @@
     "log_max_size_mb": 50,
     "email_recipient": "alerts@example.com",
     "email_sender": "monitor@example.com",
+    "email_cooldown_min": 60,
     "scripts_dir": "scripts"
   },
   "processes": [

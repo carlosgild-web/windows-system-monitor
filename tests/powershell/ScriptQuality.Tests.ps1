@@ -18,7 +18,10 @@ Describe 'Monitor <Name> actions' -ForEach $monitors {
     It 'dot-sources the shared action library and calls it' {
         $text = Get-Content $Path -Raw
         $text | Should -Match ([regex]::Escape("'lib\MonitorActions.ps1'"))
-        $text | Should -Match 'Invoke-MonitorActions\s+-Actions'
+        # threshold monitors go through Invoke-ThresholdAlerts (hysteresis), the process monitor
+        # calls Invoke-MonitorActions on its running -> stopped transition
+        ($text -match 'Invoke-ThresholdAlerts\s+-Checks' -or $text -match 'Invoke-MonitorActions\s+-Actions') |
+            Should -BeTrue -Because 'alerts must go through the shared library (spam guard, cooldown)'
     }
 
     It 'does not define its own copy of the action functions' {

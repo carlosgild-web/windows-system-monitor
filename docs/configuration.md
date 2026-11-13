@@ -37,6 +37,7 @@ folder, so the repository works wherever it is cloned.
 | `log_max_size_mb` | number > 0 | When the log reaches this size it is renamed with a timestamp and a new one is started. |
 | `email_recipient` | string | Available to templates as `{global.email_recipient}`. |
 | `email_sender` | string | Informational. |
+| `email_cooldown_min` | number >= 0 | At most one `email_draft` per item and level within this many minutes (default 60, `0` = off). See [Incidents, spam guard and email cooldown](#incidents-spam-guard-and-email-cooldown). |
 | `scripts_dir` | path | Available to templates as `{global.scripts_dir}`. |
 
 ## `processes[]`
@@ -76,7 +77,8 @@ folder, so the repository works wherever it is cloned.
 ```
 
 A threshold fires only after the value has stayed at or above `percent` for `sustain_sec` seconds. When several
-levels are exceeded, only the highest one fires.
+levels are exceeded, only the highest one fires. The incident then stays open until the value has been below
+`percent - clear_margin` for `clear_sec` (see [Incidents](#incidents-spam-guard-and-email-cooldown)).
 
 ## `disk[]`
 
@@ -129,11 +131,37 @@ This monitor needs Microsoft Excel (COM automation) and reports progress only; i
 
 ¹ Process actions use `instructions` instead of `message_template`.
 
-### Spam guard
+### Incidents, spam guard and email cooldown
 
-The first alert for a condition runs every configured action. While the condition persists, repeat alerts run only
-`log_to_file` and `run_script`; `popup` and `email_draft` are suppressed until the condition clears and occurs again.
-You get one popup per incident, and the log and remediation keep going.
+Three rules keep a noisy metric from flooding you with popups and email drafts.
+
+**1. One incident per problem (hysteresis).** For CPU, memory, disk and network thresholds, an incident *opens* when
+the threshold is crossed (after `sustain_sec`, for CPU and memory) and *closes* only when the value has been clearly
+back to normal for a while. A value hovering around the threshold, such as RAM going 95.2 → 94.8 → 95.1 %, stays one
+incident. Two optional fields on any threshold tune this:
+
+| Field | Meaning | Default |
+|---|---|---|
+| `clear_margin` | How far below the threshold the value must drop: percentage points (CPU, memory, disk) or ms (latency). | 5 points (CPU/memory), 2 points (disk), 20 % of `latency_ms` |
+| `clear_sec` | How long it must stay there before the incident closes. | `sustain_sec` (CPU/memory), one check interval (disk, network) |
+
+`"condition": "unreachable"` closes once the host answers again for `clear_sec`. While a higher level (critical) is
+open, a lower level (warning) does not fire.
+
+**2. Spam guard.** The first alert of an incident runs every configured action. While the incident stays open, repeat
+alerts run only `log_to_file` and `run_script`; `popup` and `email_draft` wait for the next incident. You get one popup
+per incident, and the log and remediation keep going.
+
+**3. Email cooldown.** Even across separate incidents, `email_draft` opens at most one draft per item and level
+within `global.email_cooldown_min` minutes (default 60, `0` turns it off). The last-sent times are saved in
+`logs/alert_state.json`, so restarting the monitors does not reset the cooldown. A skipped draft is logged:
+
+```
+[2026-11-13 10:42:00] INFO email_draft for performance|memory|critical skipped: one was opened less than 60 min ago (global.email_cooldown_min)
+```
+
+Processes don't need hysteresis (they are either running or not), but their `email_draft` actions share the same
+cooldown, so a process that keeps crashing doesn't open a draft every time.
 
 ### Severity convention
 

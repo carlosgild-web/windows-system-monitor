@@ -34,6 +34,10 @@ Describe 'Test-DoctorConfig detects <Case>' -ForEach @(
     @{ Case = 'run_script without a path';     Check = 'performance.cpu.thresholds[1].actions[2] (run_script)'; Mutate = { param($c) $c.performance.cpu.thresholds[1].actions[2].PSObject.Properties.Remove('path') } }
     @{ Case = 'email_draft without a subject'; Check = 'performance.cpu.thresholds[1].actions[1] (email_draft)'; Mutate = { param($c) $c.performance.cpu.thresholds[1].actions[1].PSObject.Properties.Remove('subject_template') } }
     @{ Case = 'a zero ebook target';           Check = 'ebook_sales.target_usd';                     Mutate = { param($c) $c.ebook_sales.target_usd = 0 } }
+    @{ Case = 'a negative email cooldown';     Check = 'global.email_cooldown_min';                  Mutate = { param($c) $c.global.email_cooldown_min = -5 } }
+    @{ Case = 'a negative clear_margin';       Check = 'performance.cpu.thresholds[1].clear_margin'; Mutate = { param($c) $c.performance.cpu.thresholds[1] | Add-Member clear_margin -5 } }
+    @{ Case = 'a non-numeric disk clear_sec';  Check = 'disk[0].thresholds[0].clear_sec';            Mutate = { param($c) $c.disk[0].thresholds[0] | Add-Member clear_sec 'soon' } }
+    @{ Case = 'a negative network clear_sec';  Check = 'network[0].thresholds[1].clear_sec';         Mutate = { param($c) $c.network[0].thresholds[1] | Add-Member clear_sec -1 } }
 ) {
     It 'as FAIL' {
         $cfg = New-TestConfig

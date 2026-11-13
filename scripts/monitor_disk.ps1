@@ -47,11 +47,9 @@ $cfg = Get-MonitorSettings
 
 $state = @{}
 foreach ($d in $cfg.disk) {
-    $perLevelCounts = @{}
-    foreach ($t in $d.thresholds) { $perLevelCounts[$t.level] = 0 }
     $state[$d.drive] = @{
         LastChecked  = $null
-        AlertCounts  = $perLevelCounts
+        Trackers     = @{}      # level -> incident tracker (see Invoke-ThresholdAlerts)
         LastResult   = $null
         LastLevel    = 'ok'
         LastCheckStr = $null
@@ -105,35 +103,28 @@ while ($true) {
         $ds.LastResult = $info
         $ds.LastLevel  = Get-ImmediateLevel -PercentUsed $info.PercentUsed -Thresholds $d.thresholds
 
-        # Sorted: warning before critical so critical wins as highestExceededLevel
-        $sorted = @($d.thresholds | Sort-Object { if ($_.level -eq 'warning') { 0 } else { 1 } })
-
-        $highestExceededLevel = $null
-        foreach ($t in $sorted) {
-            if ($null -ne $t.percent_used -and $info.PercentUsed -ge $t.percent_used) {
-                $highestExceededLevel = $t.level
-            }
-        }
-
-        foreach ($t in $sorted) {
-            $lvl = $t.level
-            if ($null -ne $t.percent_used -and $info.PercentUsed -ge $t.percent_used) {
-                if ($lvl -eq $highestExceededLevel) {
-                    $templateVars = @{
-                        timestamp     = $now.ToString('yyyy-MM-dd HH:mm:ss')
-                        hostname      = $hostname
-                        current_value = [string]$info.PercentUsed
-                        percent_used  = [string]$t.percent_used
-                        free_gb       = [string]$info.FreeGB
-                    }
-                    $suppress = ($ds.AlertCounts[$lvl] -gt 0)
-                    Invoke-MonitorActions -Actions $t.actions -Vars $templateVars -GlobalCfg $cfg.global -SuppressSpam:$suppress
-                    $ds.AlertCounts[$lvl]++
+        # Hysteresis: an incident closes only after usage stays clear_margin points under the
+        # threshold (default 2) for clear_sec (default: one check interval, i.e. two good checks).
+        $checks = foreach ($t in (Get-ThresholdsLowFirst $d.thresholds)) {
+            if ($null -eq $t.percent_used) { continue }
+            @{
+                Level      = $t.level
+                Actions    = $t.actions
+                Exceeded   = ($info.PercentUsed -ge $t.percent_used)
+                BelowClear = ($info.PercentUsed -lt ($t.percent_used - (Get-ClearSetting $t 'clear_margin' 2)))
+                SustainSec = 0
+                ClearSec   = (Get-ClearSetting $t 'clear_sec' $interval)
+                Vars       = @{
+                    timestamp     = $now.ToString('yyyy-MM-dd HH:mm:ss')
+                    hostname      = $hostname
+                    current_value = [string]$info.PercentUsed
+                    percent_used  = [string]$t.percent_used
+                    free_gb       = [string]$info.FreeGB
                 }
-            } else {
-                $ds.AlertCounts[$lvl] = 0
             }
         }
+        $null = Invoke-ThresholdAlerts -Checks @($checks) -Trackers $ds.Trackers -Now $now `
+            -GlobalCfg $cfg.global -KeyPrefix "disk|$($d.drive)"
 
         $drivesOutput.Add([ordered]@{
             drive         = $d.drive

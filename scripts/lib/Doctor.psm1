@@ -116,6 +116,15 @@ function Test-DoctorEnvironment {
 }
 
 # ---- Configuration schema ----------------------------------------------------
+function Test-ClearSettings ($Threshold, [string]$Where) {
+    # Optional hysteresis overrides on any threshold: clear_margin and clear_sec, numbers >= 0.
+    foreach ($k in 'clear_margin', 'clear_sec') {
+        if ((Test-HasValue $Threshold $k) -and (-not (Test-IsNumber $Threshold.$k) -or $Threshold.$k -lt 0)) {
+            New-DoctorResult 'Config' 'FAIL' "$Where.$k" 'Must be a number >= 0'
+        }
+    }
+}
+
 function Test-DoctorConfig ($Config) {
     $r = @()
     $cat = 'Config'
@@ -137,6 +146,9 @@ function Test-DoctorConfig ($Config) {
         }
         foreach ($k in 'check_interval_sec', 'log_max_size_mb') {
             if (-not (Test-IsNumber $g.$k) -or $g.$k -le 0) { $r += New-DoctorResult $cat 'FAIL' "global.$k" 'Must be a positive number'; $errors++ }
+        }
+        if ((Test-HasValue $g 'email_cooldown_min') -and (-not (Test-IsNumber $g.email_cooldown_min) -or $g.email_cooldown_min -lt 0)) {
+            $r += New-DoctorResult $cat 'FAIL' 'global.email_cooldown_min' 'Must be a number >= 0 (0 turns the cooldown off)'; $errors++
         }
     }
 
@@ -168,6 +180,7 @@ function Test-DoctorConfig ($Config) {
             if (-not (Test-IsNumber $t.sustain_sec) -or $t.sustain_sec -lt 0) {
                 $r += New-DoctorResult $cat 'FAIL' "$where.sustain_sec" 'Must be a number >= 0'; $errors++
             }
+            $bad = @(Test-ClearSettings $t $where); $r += $bad; $errors += $bad.Count
             $j++
         }
     }
@@ -185,6 +198,7 @@ function Test-DoctorConfig ($Config) {
             if (-not (Test-IsNumber $t.percent_used) -or $t.percent_used -le 0 -or $t.percent_used -gt 100) {
                 $r += New-DoctorResult $cat 'FAIL' "disk[$k].thresholds[$j].percent_used" 'Must be a number between 1 and 100'; $errors++
             }
+            $bad = @(Test-ClearSettings $t "disk[$k].thresholds[$j]"); $r += $bad; $errors += $bad.Count
             $j++
         }
         $k++
@@ -210,6 +224,7 @@ function Test-DoctorConfig ($Config) {
             if (-not $hasLatency -and -not $isDown) {
                 $r += New-DoctorResult $cat 'FAIL' "$where.thresholds[$j]" 'Needs latency_ms or condition "unreachable"'; $errors++
             }
+            $bad = @(Test-ClearSettings $t "$where.thresholds[$j]"); $r += $bad; $errors += $bad.Count
             $j++
         }
         $k++
