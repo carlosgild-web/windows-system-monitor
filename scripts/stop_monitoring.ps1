@@ -46,6 +46,14 @@ foreach ($scriptName in $MONITOR_SCRIPTS) {
     }
 }
 
+# The settings editor (server.py), e.g. started hidden by the console's "Open Monitoring
+# settings" button. Matched on this project's full path: "server.py" alone is too common.
+$editorPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'server.py'
+foreach ($proc in @($allPs | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -and
+        $_.CommandLine.IndexOf($editorPath, [StringComparison]::OrdinalIgnoreCase) -ge 0 })) {
+    $found.Add([pscustomobject]@{ Script = 'settings editor'; PID = $proc.ProcessId })
+}
+
 # ─── Nothing to stop ──────────────────────────────────────────────────────────
 if ($found.Count -eq 0) {
     Write-Host ""

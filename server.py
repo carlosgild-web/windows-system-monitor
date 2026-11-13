@@ -181,9 +181,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    import sys
     url = f"http://localhost:{PORT}"
     print(f"\n  Monitoring Settings Editor")
     print(f"  Open: {url}")
     print("  Stop: Ctrl+C\n")
-    webbrowser.open(url)
+    # --no-browser: started by the console's "Open Monitoring settings" button,
+    # which opens the page itself.
+    if "--no-browser" not in sys.argv[1:]:
+        webbrowser.open(url)
     HTTPServer(("localhost", PORT), Handler).serve_forever()
