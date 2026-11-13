@@ -7,7 +7,7 @@
 #   docker compose up --build        then open http://localhost:5758
 #
 # Standard library only: no pip install. Runs as a non-root user.
-FROM python:3.12.7-slim-bookworm
+FROM python:3.15.0-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
