@@ -17,3 +17,6 @@ desktop.ini
 
 # Test output
 pester-results.xml
+
+# Raw image downloads (Gemini); prepared images are committed. See docs/images.md
+art/raw/

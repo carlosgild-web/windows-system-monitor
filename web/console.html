@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Monitoring Console</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/img/app-icon-180.png">
 <link rel="stylesheet" href="/static/theme.css">
 <script src="/static/theme.js"></script>
 <style>
@@ -78,6 +79,12 @@ body { min-height: 100vh; display: flex; flex-direction: column; }
 .row .btn { flex-shrink: 0; }
 .empty { display: flex; align-items: center; gap: 10px; padding: 18px 16px; font-size: 13px; color: var(--text-3); }
 .empty code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; color: var(--text-2); }
+/* Illustration slots (docs/images.md). The icon underneath shows when the image is missing. */
+.state-slot { position: relative; display: grid; place-items: center; width: 64px; height: 64px; flex-shrink: 0; border-radius: 14px; background: var(--surface-2); color: var(--text-3); overflow: hidden; }
+.state-slot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.paused-note { display: none; }
+.mon-card.paused .paused-note { display: flex; border-bottom: 1px solid var(--border); }
+.guide-art { display: block; width: 100%; aspect-ratio: 23 / 10; object-fit: cover; border-radius: 12px; background: var(--surface-2); }
 .fade-in { animation: fade .2s ease; }
 @keyframes fade { from { opacity: .4; } to { opacity: 1; } }
 
@@ -362,6 +369,7 @@ body.guide-hidden .guide-pill { display: inline-flex; }
       <button class="btn btn-ghost btn-icon" onclick="closeGuide()" aria-label="Close"><svg class="icon"><use href="/static/icons.svg#i-close"/></svg></button>
     </div>
     <div class="drawer-body">
+      <img class="guide-art" src="/static/img/guide.webp" alt="" onerror="this.remove()">
       <section>
         <h3>What this is</h3>
         <p>A monitoring and auto-remediation toolkit for Windows, driven by one JSON file. Five PowerShell monitors
@@ -443,7 +451,10 @@ function row(lvl, title, ttid, sub, metric, right, extraCls){
   <div class="row-badge">${right}</div>
 </div>`;
 }
-function empty(msg){ return `<div class="empty">${ico('info')}<span>${msg}</span></div>`; }
+function stateSlot(art, fallbackIcon){
+  return `<span class="state-slot" aria-hidden="true">${ico(fallbackIcon,'icon-xl')}<img src="/static/img/state-${art}.webp" alt="" onerror="this.remove()"></span>`;
+}
+function empty(msg, art){ return `<div class="empty">${art?stateSlot(art,'info'):ico('info')}<span>${msg}</span></div>`; }
 
 // ── Tooltips: hover or keyboard focus on an info button ─────────────────────
 const _ttBox = document.getElementById('tt-box');
@@ -538,6 +549,10 @@ function render(d){
     const card=document.getElementById('card-'+key), ctrl=document.getElementById('ctrl-'+key);
     if(!card||!ctrl) return;
     card.classList.toggle('paused', !active);
+    if(!card.querySelector('.paused-note')){
+      card.querySelector('.card-head').insertAdjacentHTML('afterend',
+        `<div class="empty paused-note">${stateSlot('paused','pause')}<span>This monitor is paused: its background script is stopped. The rows below are its last known state.</span></div>`);
+    }
     if(!caps.control){
       ctrl.innerHTML=active?`<span class="badge b-info b-plain" title="Monitors can only be paused on Windows">${d.demo_mode?'Simulated':'Read-only'}</span>`
         :'<span class="badge b-unk b-plain">No data</span>';
@@ -576,7 +591,7 @@ function render(d){
   const pfl=document.getElementById('perf-list');
   const perf=d.performance||[];
   document.getElementById('meta-performance').textContent=perf.length?'CPU and memory, sustained thresholds':'';
-  if(!perf.length) pfl.innerHTML=empty('No data yet. Start <code>performance_monitor.ps1</code>.');
+  if(!perf.length) pfl.innerHTML=empty('No data yet. Start <code>performance_monitor.ps1</code>.', 'nodata');
   else pfl.innerHTML=perf.map((m,i)=>{
     const lvl=lvlOf(m.current_level); if(mons.performance) note(lvl, m.display_name);
     const c=(cfg.performance||{})[m.name]||{};
@@ -591,7 +606,7 @@ function render(d){
   const dkl=document.getElementById('disk-list');
   const disks=d.disks||[];
   document.getElementById('meta-disk').textContent=disks.length?`${disks.length} drive${disks.length>1?'s':''}`:'';
-  if(!disks.length) dkl.innerHTML=empty('No data yet. Start <code>monitor_disk.ps1</code>.');
+  if(!disks.length) dkl.innerHTML=empty('No data yet. Start <code>monitor_disk.ps1</code>.', 'nodata');
   else dkl.innerHTML=disks.map((m,i)=>{
     const lvl=lvlOf(m.current_level); if(mons.disk) note(lvl, m.display_name);
     const c=(cfg.disk||[]).find(x=>x.drive===m.drive)||{};
@@ -607,7 +622,7 @@ function render(d){
   const ntl=document.getElementById('net-list');
   const nets=d.network||[];
   document.getElementById('meta-network').textContent=nets.length?`${nets.filter(n=>n.reachable).length} of ${nets.length} reachable`:'';
-  if(!nets.length) ntl.innerHTML=empty('No data yet. Start <code>monitor_network.ps1</code>.');
+  if(!nets.length) ntl.innerHTML=empty('No data yet. Start <code>monitor_network.ps1</code>.', 'nodata');
   else ntl.innerHTML=nets.map((m,i)=>{
     const lvl=lvlOf(m.current_level); if(mons.network) note(lvl, m.name);
     const c=(cfg.network||[]).find(x=>x.name===m.name)||{};
@@ -621,12 +636,13 @@ function render(d){
   const dl=document.getElementById('doc-list');
   const docCfg=cfg.document||{};
   document.getElementById('meta-document').textContent=docCfg.path?docCfg.path.split(/[\\/]/).pop():'';
-  if(!d.document) dl.innerHTML=empty('No data yet. Start <code>monitor_document.ps1</code>.');
+  if(!d.document) dl.innerHTML=empty('No data yet. Start <code>monitor_document.ps1</code>.', 'nodata');
   else {
     const ds=d.document, ttid='doc-0'; _ttCache[ttid]=_ttDoc(ds,docCfg);
     if(ds.error){
       if(mons.document) note('critical', ds.display_name||'Document');
-      dl.innerHTML=row('critical', ds.display_name||'Document', ttid, esc(ds.error), '', badge('critical','Data error'), 'err');
+      dl.innerHTML=row('critical', ds.display_name||'Document', ttid, esc(ds.error), '', badge('critical','Data error'), 'err')+
+        `<div class="empty">${stateSlot('error','alert')}<span>Check the file path and the column names in the settings editor's Document panel.</span></div>`;
     } else {
       const u=ds.unit||'', lvl=lvlOf(ds.current_level);
       if(mons.document) note(lvl, ds.display_name||'Document');

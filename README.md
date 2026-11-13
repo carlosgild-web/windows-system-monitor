@@ -1,4 +1,6 @@
-# Windows System Monitor
+<p align="center"><img src="docs/images/hero.webp" alt="A desktop computer surrounded by monitoring dashboards: charts, gauges and green, amber and red status lights" width="100%"></p>
+
+# <img src="web/static/img/app-icon-180.png" alt="" width="36" align="top"> Windows System Monitor
 
 [![CI](https://github.com/carlosgild-web/windows-system-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/carlosgild-web/windows-system-monitor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
