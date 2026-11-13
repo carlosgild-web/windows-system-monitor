@@ -5,6 +5,7 @@ Usage: python monitoring_console.py
        Browser opens automatically at http://localhost:5758
 """
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -26,6 +27,13 @@ DISK_STATE_FILE = BASE / "logs" / "disk_state.json"
 NET_STATE_FILE   = BASE / "logs" / "network_state.json"
 DOC_STATE_FILE   = BASE / "logs" / "document_state.json"
 PORT          = 5758
+# Off Windows (the Docker demo) the console is read-only: no tasklist live check, no
+# starting/stopping monitors, no launching the editor. It shows the state files it is given.
+IS_WINDOWS    = os.name == "nt"
+DEMO_MODE     = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
+BIND_HOST     = os.environ.get("BIND_HOST", "localhost")
+EDITOR_HOST   = os.environ.get("EDITOR_HOST", "127.0.0.1")   # where to probe the editor (a compose service name)
+NOT_ON_THIS_PLATFORM = "Needs Windows: not available in the demo container"
 EDITOR_PORT   = 5757
 EDITOR_SCRIPT = BASE / "server.py"
 WEB_DIR       = BASE / "web"
@@ -115,6 +123,8 @@ def stop_monitor(key: str) -> dict:
     path = MONITOR_SCRIPTS.get(key)
     if not path:
         return {"ok": False, "error": "unknown monitor"}
+    if not IS_WINDOWS:
+        return {"ok": False, "error": NOT_ON_THIS_PLATFORM}
     stem = path.stem
     cmd = (
         f"Get-CimInstance Win32_Process | Where-Object {{"
@@ -136,6 +146,8 @@ def start_monitor(key: str) -> dict:
     path = MONITOR_SCRIPTS.get(key)
     if not path:
         return {"ok": False, "error": "unknown monitor"}
+    if not IS_WINDOWS:
+        return {"ok": False, "error": NOT_ON_THIS_PLATFORM}
     if not path.exists():
         return {"ok": False, "error": f"script not found: {path}"}
     stem = path.stem
@@ -166,9 +178,9 @@ def start_monitor(key: str) -> dict:
     return {"ok": True}
 
 
-def _port_open(port: int, timeout: float = 0.3) -> bool:
+def _port_open(port: int, timeout: float = 0.3, host: str = "127.0.0.1") -> bool:
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+        with socket.create_connection((host, port), timeout=timeout):
             return True
     except OSError:
         return False
@@ -182,8 +194,10 @@ def open_editor(wait_sec: float = 6.0) -> dict:
     line, which is how stop_monitoring.ps1 finds and stops it.
     """
     url = f"http://localhost:{EDITOR_PORT}"
-    if _port_open(EDITOR_PORT):
+    if _port_open(EDITOR_PORT, host=EDITOR_HOST):
         return {"ok": True, "url": url, "already_running": True}
+    if not IS_WINDOWS:
+        return {"ok": False, "error": "The settings editor is not running"}
     if not EDITOR_SCRIPT.exists():
         return {"ok": False, "error": f"server.py not found in {BASE.name}"}
     exe = sys.executable or shutil.which("pythonw") or shutil.which("python") or "python"
@@ -229,6 +243,8 @@ def _check_fresh(path, max_interval_sec):
 
 def check_running(exe_name: str):
     """Live check: is exe_name currently running? Returns True/False, or None on error."""
+    if not IS_WINDOWS:
+        return None                      # no tasklist: the state file is the only source
     try:
         r = subprocess.run(
             ["tasklist", "/FI", f"IMAGENAME eq {exe_name}", "/FO", "CSV", "/NH"],
@@ -345,6 +361,8 @@ def get_status():
             "network":     cfg.get("network", []),
             "document":    cfg.get("document"),
         },
+        "capabilities":  {"control": IS_WINDOWS, "open_editor": IS_WINDOWS or DEMO_MODE},
+        "demo_mode":     DEMO_MODE,
         "server_time":   datetime.now().strftime("%H:%M:%S"),
         "version":       cfg.get("_meta", {}).get("version", "?"),
     }
@@ -412,6 +430,7 @@ if __name__ == "__main__":
     print(f"  Dashboard : {url}")
     print(f"  Settings  : {SETTINGS_FILE}")
     print("  Stop      : Ctrl+C\n")
-    # Open browser after a 1-second delay so the server is ready to accept connections
-    threading.Thread(target=lambda: (time.sleep(1), webbrowser.open(url)), daemon=True).start()
-    ThreadedServer(("localhost", PORT), Handler).serve_forever()
+    # Open the browser after a 1-second delay so the server is ready to accept connections
+    if IS_WINDOWS and not os.environ.get("NO_BROWSER"):
+        threading.Thread(target=lambda: (time.sleep(1), webbrowser.open(url)), daemon=True).start()
+    ThreadedServer((BIND_HOST, PORT), Handler).serve_forever()

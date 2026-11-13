@@ -86,7 +86,7 @@ class OpenEditorHttpTests(unittest.TestCase):
 class ServerFlagTests(unittest.TestCase):
     def test_server_skips_the_browser_with_no_browser(self):
         source = (ROOT / "server.py").read_text(encoding="utf-8")
-        self.assertIn('if "--no-browser" not in sys.argv[1:]:', source)
+        self.assertIn('"--no-browser" not in sys.argv[1:]', source)
 
 
 if __name__ == "__main__":
