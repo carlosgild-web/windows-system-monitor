@@ -40,7 +40,7 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
         ├── scripts/performance_monitor.ps1  → logs/performance_state.json
         ├── scripts/monitor_disk.ps1         → logs/disk_state.json
         ├── scripts/monitor_network.ps1      → logs/network_state.json
-        └── scripts/monitor_ebook_sales.ps1  → logs/ebook_state.json
+        └── scripts/monitor_document.ps1     → logs/document_state.json
                                                    │
                      MonitoringConsole/monitoring_console.py (:5758)
                      reads config + state files; live tasklist check for processes
@@ -56,7 +56,9 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
   `Write-MonitorLog` (rotating log writer). Never copy action code into a monitor; a test enforces this.
 - **`scripts/lib/Doctor.psm1`**: all health checks (`Test-DoctorEnvironment/Config/Paths/Runtime`, `Invoke-Doctor`).
   Used by `doctor.ps1`, the launcher preflight, and the Pester tests.
-- **`scripts/lib/Read-XlsxTotal.ps1`**: the ebook monitor runs this as a short-lived child process for every
+- **`scripts/lib/DocumentReader.ps1`**: the document monitor's reader. `.csv` is read in-process (no Excel);
+  `Get-DocumentChecks` builds its above/below threshold checks.
+- **`scripts/lib/Read-XlsxTotal.ps1`**: for `.xlsx` documents, run as a short-lived child process for every
   workbook read. Excel COM only exits when the driving process ends normally, so never move Excel automation back
   into a long-lived monitor process (force-stopping it would orphan a hidden `EXCEL.EXE`).
 - **`scripts/actions/on_*.ps1`**: sample `run_script` handlers, built on `scripts/lib/ActionHandler.ps1`
@@ -80,7 +82,8 @@ doctor afterwards. Full reference: `docs/configuration.md`.
   persisted in `logs/alert_state.json` (shared by all monitor processes, guarded by a named mutex).
 - **Template variables:** `{timestamp}`, `{hostname}`, `{global.<field>}` everywhere; `{proc_name}`, `{proc_display}`
   (processes); `{current_value}`, `{percent}`, `{sustain_sec}` (CPU/memory); `{current_value}`, `{percent_used}`,
-  `{free_gb}` (disk); `{host}`, `{port}`, `{current_value}`, `{latency_ms}` (network; `{latency_ms}` is the threshold).
+  `{free_gb}` (disk); `{host}`, `{port}`, `{current_value}`, `{latency_ms}` (network; `{latency_ms}` is the threshold);
+  `{document}`, `{current_value}`, `{current_percent}`, `{target}`, `{unit}`, `{percent_of_target}` (document).
 
 ### Adding a new monitor type
 

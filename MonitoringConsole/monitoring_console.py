@@ -20,7 +20,7 @@ STATE_FILE     = BASE / "logs" / "process_state.json"
 PERF_STATE_FILE = BASE / "logs" / "performance_state.json"
 DISK_STATE_FILE = BASE / "logs" / "disk_state.json"
 NET_STATE_FILE   = BASE / "logs" / "network_state.json"
-EBOOK_STATE_FILE = BASE / "logs" / "ebook_state.json"
+DOC_STATE_FILE   = BASE / "logs" / "document_state.json"
 PORT          = 5758
 
 MONITOR_SCRIPTS = {
@@ -28,7 +28,7 @@ MONITOR_SCRIPTS = {
     "performance": BASE / "scripts" / "performance_monitor.ps1",
     "disk":        BASE / "scripts" / "monitor_disk.ps1",
     "network":     BASE / "scripts" / "monitor_network.ps1",
-    "ebook_sales": BASE / "scripts" / "monitor_ebook_sales.ps1",
+    "document":    BASE / "scripts" / "monitor_document.ps1",
 }
 
 
@@ -171,13 +171,13 @@ def get_status():
     perf_int  = cfg.get("performance", {}).get("cpu", {}).get("check_interval_sec", 10)
     disk_int  = min((d.get("check_interval_sec", 60) for d in cfg.get("disk", [])), default=60)
     net_int   = min((h.get("check_interval_sec", 30) for h in cfg.get("network", [])), default=30)
-    ebook_int = cfg.get("ebook_sales", {}).get("check_interval_sec", 60)
+    doc_int   = (cfg.get("document") or {}).get("check_interval_sec", 60)
     monitors = {
         "process":     proc_ok,
         "performance": _check_fresh(PERF_STATE_FILE,   perf_int),
         "disk":        _check_fresh(DISK_STATE_FILE,   disk_int),
         "network":     _check_fresh(NET_STATE_FILE,    net_int),
-        "ebook_sales": _check_fresh(EBOOK_STATE_FILE,  ebook_int),
+        "document":    _check_fresh(DOC_STATE_FILE,    doc_int),
     }
 
     state_map = {p["name"]: p for p in state.get("processes", [])}
@@ -230,12 +230,11 @@ def get_status():
     except Exception:
         pass
 
-    ebook_state = {}
+    doc_state = {}
     try:
-        ebook_state = json.loads(EBOOK_STATE_FILE.read_text(encoding="utf-8-sig"))
+        doc_state = json.loads(DOC_STATE_FILE.read_text(encoding="utf-8-sig"))
     except Exception:
         pass
-    ebook_filter = cfg.get("ebook_sales", {}).get("filter_value", "Ebook")
 
     return {
         "engine":        {"ok": any(monitors.values()), "monitors": monitors,
@@ -247,8 +246,7 @@ def get_status():
         "performance":   perf_state.get("metrics", []),
         "disks":         disk_state.get("drives", []),
         "network":       net_state.get("hosts", []),
-        "ebook_sales":   ebook_state if ebook_state else None,
-        "ebook_filter":  ebook_filter,
+        "document":      doc_state if doc_state else None,
         "config": {
             "meta":        cfg.get("_meta", {}),
             "global":      cfg.get("global", {}),
@@ -256,6 +254,7 @@ def get_status():
             "performance": cfg.get("performance", {}),
             "disk":        cfg.get("disk", []),
             "network":     cfg.get("network", []),
+            "document":    cfg.get("document"),
         },
         "server_time":   datetime.now().strftime("%H:%M:%S"),
         "version":       cfg.get("_meta", {}).get("version", "?"),
@@ -342,8 +341,8 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .sec-head{background:var(--bg3);display:flex;align-items:center;justify-content:space-between}
 .sec-processes .sec-head,.sec-perf .sec-head,.sec-disk .sec-head,.sec-net .sec-head{background:#9dc8c2;border-bottom-color:#7db0a9}
 .sec-processes .sec-title,.sec-perf .sec-title,.sec-disk .sec-title,.sec-net .sec-title{color:#1a2740}
-.sec-ebook .sec-head{background:#9fa6c8;border-bottom-color:#818ab5}
-.sec-ebook .sec-title{color:#1a2740}
+.sec-doc .sec-head{background:#9fa6c8;border-bottom-color:#818ab5}
+.sec-doc .sec-title{color:#1a2740}
 .sec-head.danger{background:#dc2626 !important;border-bottom-color:#991b1b !important}
 .sec-head.danger .sec-title{color:#ffffff !important}
 .sec-head.danger .btn-start{background:#ffffff;color:#dc2626;border-color:#ffffff}
@@ -442,7 +441,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
   <div id="mon-perf" class="mon-item"><span class="mon-dot"></span><span>Performance</span></div>
   <div id="mon-disk" class="mon-item"><span class="mon-dot"></span><span>Disk</span></div>
   <div id="mon-net" class="mon-item"><span class="mon-dot"></span><span>Network</span></div>
-  <div id="mon-ebook" class="mon-item"><span class="mon-dot"></span><span>Ebook Sales</span></div>
+  <div id="mon-doc" class="mon-item"><span class="mon-dot"></span><span>Document</span></div>
 </div>
 
 <div class="main-outer">
@@ -478,9 +477,9 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
         <span class="group-hdr-lbl">Content Monitoring</span>
         <div class="group-hdr-line"></div>
       </div>
-      <div class="section sec-ebook">
-        <div class="sec-head" id="head-ebook_sales"><span class="sec-title">Ebook Sales</span><span id="ctrl-ebook_sales"></span></div>
-        <div class="sec-body" id="ebook-list"><div class="empty-row">Loading…</div></div>
+      <div class="section sec-doc">
+        <div class="sec-head" id="head-document"><span class="sec-title">Document</span><span id="ctrl-document"></span></div>
+        <div class="sec-body" id="doc-list"><div class="empty-row">Loading…</div></div>
       </div>
     </div>
 
@@ -536,7 +535,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 <script>
 const REFRESH = 10;
 const ACT_ICONS = {popup:'🔔', log_to_file:'📝', email_draft:'📧', run_script:'⚙️'};
-const KEY_TO_BODY={process:'proc-list',performance:'perf-list',disk:'disk-list',network:'net-list',ebook_sales:'ebook-list'};
+const KEY_TO_BODY={process:'proc-list',performance:'perf-list',disk:'disk-list',network:'net-list',document:'doc-list'};
 let cdTimer, cdVal = REFRESH;
 const pendingStop = new Set();
 
@@ -623,17 +622,19 @@ function _ttProc(p){
     `<div class="tt-meta">Process: ${esc(p.name)} &nbsp;·&nbsp; ${p.required?'Required':'Optional'} &nbsp;·&nbsp; Check every ${p.check_sec}s</div>`+
     `<div class="tt-hr"></div><div class="tt-meta">On not running: ${acts||'—'}</div>${instr}`;
 }
-function _ttEbook(es, cfg){
-  const target=parseFloat((cfg||{}).target_usd)||300;
-  const chk=(cfg||{}).check_interval_sec||60;
-  const sales=es.total_sales!=null?parseFloat(es.total_sales):0;
-  const pct=Math.min(100,Math.round((sales/target)*100));
-  const cur=es.error
-    ?`<span style="color:#f87171">Error: ${esc(es.error)}</span>`
-    :`Current: <b>$${sales.toFixed(2)}</b> &nbsp;(${pct}% of $${target} target)`;
-  return `<div class="tt-title">${'Total '+(es.filter_value||'Ebook')+' Sales'}</div>`+
-    `<div class="tt-meta">Target: $${target} &nbsp;·&nbsp; Check every ${chk}s</div>`+
-    `<div class="tt-cur">${cur}</div>`;
+function _docRule(t){
+  return `${t.condition==='below'?'Below':'Above'} <b>${t.percent_of_target}%</b> of target`;
+}
+function _ttDoc(ds, cfg){
+  const c=cfg||{}, u=ds.unit||'';
+  const chk=c.check_interval_sec||60;
+  const cur=ds.error
+    ?`<span style="color:#f87171">Error: ${esc(ds.error)}</span>`
+    :`Current: <b>${esc(u)}${Number(ds.total||0).toFixed(2)}</b> &nbsp;(${ds.percent_of_target}% of ${esc(u)}${ds.target})`;
+  const rules=(c.thresholds||[]).map(t=>`<div class="tt-thresh"><span class="${t.level==='critical'?'tt-lvl-crit':'tt-lvl-warn'}">${esc((t.level||'').toUpperCase())}</span><span class="tt-cond">${_docRule(t)}</span></div>`).join('');
+  return `<div class="tt-title">${esc(ds.display_name||'Document')}</div>`+
+    `<div class="tt-meta">${esc(c.path||ds.path||'')} &nbsp;·&nbsp; ${esc(c.filter_column||'')} = ${esc(c.filter_value||'')} &nbsp;·&nbsp; sum of ${esc(c.value_column||'')} &nbsp;·&nbsp; every ${chk}s</div>`+
+    `<div class="tt-cur">${cur}</div>${rules?'<div class="tt-hr"></div>'+rules:''}`;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -645,7 +646,7 @@ function render(d){
 
   const eng=d.engine, pd=document.getElementById('pdot');
   const mons=eng.monitors||{};
-  const monIds={process:'mon-process',performance:'mon-perf',disk:'mon-disk',network:'mon-net',ebook_sales:'mon-ebook'};
+  const monIds={process:'mon-process',performance:'mon-perf',disk:'mon-disk',network:'mon-net',document:'mon-doc'};
   Object.entries(monIds).forEach(([k,id])=>{
     const el=document.getElementById(id);
     if(el) el.className='mon-item '+(mons[k]?'mon-active':'');
@@ -749,50 +750,45 @@ function render(d){
 </div>`;
   }).join(''); }
 
-  // ebook sales
-  const ebl=document.getElementById('ebook-list');
-  const ebookCfg=(cfg.ebook_sales)||{};
-  if(!d.ebook_sales){
-    ebl.innerHTML='<div class="empty-row">Start monitor_ebook_sales.ps1</div>';
+  // document (CSV / Excel) -- the level comes from the monitor's thresholds
+  const dl=document.getElementById('doc-list');
+  const docCfg=cfg.document||{};
+  if(!d.document){
+    dl.innerHTML='<div class="empty-row">Start monitor_document.ps1</div>';
   } else {
-    const es=d.ebook_sales;
-    es.filter_value=es.filter_value||d.ebook_filter||'Ebook';
-    const ttid='ebook-0'; _ttCache[ttid]=_ttEbook(es,ebookCfg);
-    if(es.error){
-      ebl.innerHTML=`<div class="item-row fade-in">
-  <div class="item-accent acc-crit"></div>
+    const ds=d.document;
+    const ttid='doc-0'; _ttCache[ttid]=_ttDoc(ds,docCfg);
+    if(ds.error){
+      dl.innerHTML=`<div class="item-row fade-in">
+  <div class="item-accent acc-red"></div>
   <div class="item-info" data-ttid="${ttid}">i</div>
   <div class="item-name">
-    <div class="item-label">${'Total '+(es.filter_value||'Ebook')+' Sales'}</div>
-    <div class="item-sub" style="color:var(--red)">${esc(es.error)}</div>
+    <div class="item-label">${esc(ds.display_name||'Document')}</div>
+    <div class="item-sub" style="color:var(--red)">${esc(ds.error)}</div>
   </div>
   <div class="item-badge"><span class="badge badge-red">DATA ERROR</span></div>
 </div>`;
     } else {
-      const sales=parseFloat(es.total_sales)||0;
-      const target=parseFloat(es.target_usd)||300;
-      const pct=Math.min(100,Math.round((sales/target)*100));
-      const fc=pct>=100?'fill-ok':pct>=50?'fill-warn':'fill-crit';
-      const lvl=pct>=100?'ok':pct>=50?'warning':'critical';
-      ebl.innerHTML=`<div class="item-row fade-in">
+      const u=ds.unit||'';
+      const total=Number(ds.total||0), pct=Number(ds.percent_of_target||0);
+      const lvl=ds.current_level||'ok';
+      const fc=lvl==='critical'?'fill-crit':lvl==='warning'?'fill-warn':'fill-ok';
+      dl.innerHTML=`<div class="item-row fade-in">
   <div class="item-accent ${accColor(lvl)}"></div>
   <div class="item-info" data-ttid="${ttid}">i</div>
   <div class="item-name">
-    <div class="item-label">${'Total '+(es.filter_value||'Ebook')+' Sales'}</div>
-    <div class="item-sub">Target: $${target.toFixed(2)}&nbsp;&middot;&nbsp;Updated: ${esc(es.updated||'&mdash;')}</div>
+    <div class="item-label">${esc(ds.display_name||'Document')}</div>
+    <div class="item-sub">${esc(ds.path||'')}&nbsp;&middot;&nbsp;Target: ${esc(u)}${Number(ds.target||0).toFixed(2)}&nbsp;&middot;&nbsp;Updated: ${esc(ds.updated||'')}</div>
   </div>
   <div class="item-metric">
-    <div class="metric-val">$${sales.toFixed(2)}</div>
-    <div class="metric-bar" title="${pct}% of target"><div class="metric-fill ${fc}" style="width:${pct}%"></div></div>
+    <div class="metric-val">${esc(u)}${total.toFixed(2)}</div>
+    <div class="metric-bar" title="${pct}% of target"><div class="metric-fill ${fc}" style="width:${Math.min(100,pct)}%"></div></div>
     <div style="font-size:10px;color:var(--muted);text-align:right;margin-top:2px">${pct}% of target</div>
   </div>
   <div class="item-badge">${lvlBadge(lvl)}</div>
 </div>`;
     }
   }
-  const _fv=d.ebook_filter||'Ebook';
-  document.querySelector('#head-ebook_sales .sec-title').textContent=_fv+' Sales';
-  document.querySelector('#mon-ebook span:last-child').textContent=_fv+' Sales';
 }
 
 function showModal(p){
@@ -845,8 +841,8 @@ async function ctrlMonitor(action, key){
 // ── Details panel ────────────────────────────────────────────────────────────
 let _detData = null;
 let _detTab  = 'settings';
-const DET_TABS   = ['settings','processes','performance','disk','network'];
-const DET_LABELS = ['&#9881; Settings','&#128203; Processes','&#128200; Performance','&#128190; Disk','&#127760; Network'];
+const DET_TABS   = ['settings','processes','performance','disk','network','document'];
+const DET_LABELS = ['&#9881; Settings','&#128203; Processes','&#128200; Performance','&#128190; Disk','&#127760; Network','&#128196; Document'];
 
 function showDetails(){
   if(!_detData) return;
@@ -875,6 +871,7 @@ function _detSection(tab, cfg){
   if(tab==='performance') return _dPerformance(cfg.performance||{});
   if(tab==='disk')        return _dDisk(cfg.disk||[]);
   if(tab==='network')     return _dNetwork(cfg.network||[]);
+  if(tab==='document')    return _dDocument(cfg.document);
   return '';
 }
 function _drow(lbl,val){ return `<div class="det-row"><div class="det-lbl">${lbl}</div><div class="det-val">${val||'<span style="color:var(--muted)">—</span>'}</div></div>`; }
@@ -901,6 +898,7 @@ function _dThresholds(thresholds){
       :t.percent!=null&&t.sustain_sec!=null?`Above <b>${t.percent}%</b> for <b>${t.sustain_sec}s</b>`
       :t.percent_used!=null?`Usage above <b>${t.percent_used}%</b>`
       :t.latency_ms!=null?`Latency above <b>${t.latency_ms}ms</b>`
+      :t.percent_of_target!=null?_docRule(t)
       :t.condition?esc(t.condition):'';
     return `<div class="det-tlvl det-tlvl-${t.level}">
   <div style="flex:1">${badge} <span style="font-size:12px;margin-left:4px">${cond}</span>
@@ -967,6 +965,19 @@ function _dNetwork(nets){
   ${_drow('Check Interval',`<b>${n.check_interval_sec||30}s</b>`)}
   <div class="det-thresh-hd">Thresholds</div>${_dThresholds(n.thresholds)}
 </div>`).join('');
+}
+function _dDocument(doc){
+  if(!doc) return '<div class="empty-row">No document monitor configured.</div>';
+  return `<div class="det-card">
+  <div class="det-card-title">&#128196; ${esc(doc.display_name||'Document')}</div>
+  ${_drow('File',`<code style="font-size:10px;background:var(--bg3);padding:1px 5px;border-radius:3px">${esc(doc.path||'')}</code>`)}
+  ${doc.sheet_name?_drow('Sheet',esc(doc.sheet_name)):''}
+  ${_drow('Rows',`${esc(doc.filter_column||'')} = <b>${esc(doc.filter_value||'')}</b>`)}
+  ${_drow('Sum of',esc(doc.value_column||''))}
+  ${_drow('Target',`<b>${esc(doc.unit||'')}${esc(doc.target)}</b>`)}
+  ${_drow('Check Interval',`<b>${doc.check_interval_sec||60}s</b>`)}
+  <div class="det-thresh-hd">Thresholds</div>${_dThresholds(doc.thresholds)}
+</div>`;
 }
 
 async function fetchStatus(){

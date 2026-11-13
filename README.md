@@ -48,7 +48,7 @@ flowchart LR
         perf[performance_monitor]
         d[monitor_disk]
         n[monitor_network]
-        e[monitor_ebook_sales]
+        e[monitor_document]
     end
 
     subgraph actions["Actions"]
@@ -82,7 +82,7 @@ crashed or hung monitor therefore shows up as stale; it can't look healthy.
 ## Quick start
 
 **Requirements:** Windows 10/11, Windows PowerShell 5.1 (built in), and Python 3 on `PATH`.
-Microsoft Excel is optional; only the ebook sales monitor needs it.
+Microsoft Excel is optional: the document monitor reads CSV files without it, and needs Excel only for `.xlsx`.
 
 ```bat
 git clone https://github.com/carlosgild-web/windows-system-monitor.git
@@ -105,12 +105,11 @@ Abbreviated output from a healthy system:
   Environment
     [OK  ] PowerShell 5.1.26100
     [OK  ] python on PATH  -  C:\Python314\python.exe
-    [OK  ] Excel COM registered  -  needed by the ebook sales monitor
   Config
     [OK  ] Schema valid  -  All sections, thresholds and actions are well-formed
   Paths
     [OK  ] run_script on_cpu_critical.ps1  -  performance.cpu.thresholds[1]
-    [OK  ] Ebook workbook  -  sample_data\ebook_sales_sample.xlsx
+    [OK  ] Document file  -  sample_data\monthly_budget_sample.csv
   Runtime
     [OK  ] process monitor  -  PID 18660, state updated 13s ago
     [OK  ] Console port 5758  -  in use by this project (PID 5652)
@@ -153,7 +152,7 @@ A broken config produces specific findings, and the exit code is the number of f
 | Performance | CPU % and RAM % | A level held for `sustain_sec` |
 | Disk | Percent used per drive | `percent_used` thresholds |
 | Network | ICMP ping or TCP connect | Latency (`latency_ms`) or `"unreachable"` |
-| Ebook sales | Sum of a filtered column in an `.xlsx` | Display only: progress toward a USD target |
+| Document | Sum of a filtered column in a `.csv` or `.xlsx` | Total `above` or `below` a percent of a target |
 
 The full schema, template variables and action reference are in **[docs/configuration.md](docs/configuration.md)**.
 
@@ -191,14 +190,14 @@ Invoke-Pester tests/powershell                      # requires Pester 5.5+
 │   ├── performance_monitor.ps1
 │   ├── monitor_disk.ps1
 │   ├── monitor_network.ps1
-│   ├── monitor_ebook_sales.ps1
+│   ├── monitor_document.ps1
 │   ├── start_monitoring.ps1      # launcher with preflight
 │   ├── stop_monitoring.ps1
 │   ├── doctor.ps1
 │   ├── run_hidden.vbs            # windowless launch (see design notes)
 │   ├── actions/                  # sample run_script remediation handlers
-│   └── lib/                      # MonitorCommon.ps1, MonitorActions.ps1, ActionHandler.ps1, Doctor.psm1
-├── sample_data/                  # made-up spreadsheet for the ebook monitor
+│   └── lib/                      # MonitorCommon, MonitorActions, DocumentReader, ActionHandler, Doctor
+├── sample_data/                  # made-up budget CSV (default) and a sample workbook
 ├── tests/                        # Pester + Python unittest suites
 └── docs/                         # configuration reference, design decisions, screenshots
 ```

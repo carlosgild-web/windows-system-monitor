@@ -28,7 +28,7 @@ those files when it is asked for status.
 
 Five small PowerShell scripts, each in its own process, each on its own interval.
 
-- **Why:** isolation. A slow Excel read in the ebook monitor can't delay CPU sampling. The console can pause and
+- **Why:** isolation. A slow Excel read in the document monitor can't delay CPU sampling. The console can pause and
   resume any single monitor, and a crash affects exactly one area.
 - **Cost:** each monitor repeats its own loop and state-file code. Everything else is shared: settings loading, path
   resolution and popups live in `scripts/lib/MonitorCommon.ps1`, and the four action types live once in
@@ -101,15 +101,15 @@ I looked at containerizing the project and decided against it for now. Two parts
 |---|---|
 | `server.py`, `monitoring_console.py` | Nearly ready: standard library only. They'd only need the browser auto-open and `os.startfile` made optional. |
 | Process / performance / disk monitors | Blocked: Windows performance counters and WMI (`Win32_OperatingSystem`, `Win32_LogicalDisk`) don't exist in Linux containers, and a container can't see the host's processes or drive letters anyway. |
-| Ebook monitor | Hardest: Excel COM automation needs Office on the host. |
+| Document monitor | CSV mode: plain file reading. Excel mode: COM automation needs Office on the host. |
 | Launchers | Blocked: `.bat` files and `wscript` are Windows-only. |
 
 The options were:
 
 - **Windows container** (`servercore`): runs mostly unchanged, but the images are 3–5 GB, it needs a Windows Docker host,
   COM in containers is unreliable, and Office licensing is complicated. Good for a proof of concept only.
-- **Linux container**: clean and small, but it means rewriting the collectors on `psutil`, the ebook monitor on
-  `openpyxl`, the network checks on `socket`, and the launchers as a Python process manager. That's an estimated 1–2 days.
+- **Linux container**: clean and small, but it means rewriting the collectors on `psutil`, the document monitor's Excel
+  mode on `openpyxl`, the network checks on `socket`, and the launchers as a Python process manager. That's an estimated 1–2 days.
 
 The tool's job is to watch the Windows machine it runs on: its processes, its drives, its desktop. A container
 would isolate it from exactly what it monitors. The useful first step is portability rather than containers:
@@ -120,10 +120,10 @@ relative to the project folder.)
 ## Known limitations
 
 - **Windows-only by design.** See section 9.
-- **The ebook monitor uses Excel COM.** Each read starts Excel, which is slow (tens of seconds) and requires Office.
-  The read runs in a short-lived child process (`scripts/lib/Read-XlsxTotal.ps1`), because Excel only exits when
-  the process that drove it ends normally. Force-stopping a long-lived monitor that held Excel left orphaned hidden
-  `EXCEL.EXE` processes. `openpyxl` would remove Excel entirely.
+- **`.xlsx` documents use Excel COM.** Each read starts Excel, which is slow (seconds) and requires Office; CSV
+  documents avoid it entirely, which is why the default is a CSV. The Excel read runs in a short-lived child process
+  (`scripts/lib/Read-XlsxTotal.ps1`), because Excel only exits when the process that drove it ends normally.
+  Force-stopping a long-lived monitor that held Excel left orphaned hidden `EXCEL.EXE` processes.
 - **`email_draft` opens a `mailto:` draft** for a person to send. It doesn't deliver email unattended.
 - **`run_script` handlers run synchronously** inside the monitor loop. Long tasks must be started detached.
 - **CPU sampling uses an English performance-counter path**, which fails on some localized Windows installs. The

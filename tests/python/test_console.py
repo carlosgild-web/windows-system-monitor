@@ -34,7 +34,7 @@ class GetStatusTests(unittest.TestCase):
             "PERF_STATE_FILE": self.tmp / "performance_state.json",
             "DISK_STATE_FILE": self.tmp / "disk_state.json",
             "NET_STATE_FILE": self.tmp / "network_state.json",
-            "EBOOK_STATE_FILE": self.tmp / "ebook_state.json",
+            "DOC_STATE_FILE": self.tmp / "document_state.json",
         }
         self.patches = [mock.patch.object(mc, k, v) for k, v in self.files.items()]
         self.live = mock.patch.object(mc, "check_running", return_value=None)
@@ -52,7 +52,7 @@ class GetStatusTests(unittest.TestCase):
             "performance": {"cpu": {"check_interval_sec": 5}},
             "disk": [{"drive": "C:\\", "check_interval_sec": 60}],
             "network": [{"name": "gw", "check_interval_sec": 30}],
-            "ebook_sales": {"check_interval_sec": 60, "filter_value": "Ebook"},
+            "document": {"check_interval_sec": 30, "path": "sample_data\\budget.csv", "target": 400},
         })
 
     def tearDown(self):
@@ -76,7 +76,7 @@ class GetStatusTests(unittest.TestCase):
         status = mc.get_status()
         self.assertFalse(status["engine"]["ok"])
         self.assertTrue(all(v is False for v in status["engine"]["monitors"].values()))
-        self.assertIsNone(status["ebook_sales"])
+        self.assertIsNone(status["document"])
         self.assertEqual(status["version"], "9.9.9")
 
     def test_settings_saved_with_bom_are_read(self):
@@ -93,7 +93,7 @@ class GetStatusTests(unittest.TestCase):
     # ── freshness ────────────────────────────────────────────────────────────
     def test_fresh_state_files_mark_monitors_alive(self):
         self.process_state(5, True)
-        for key in ("PERF_STATE_FILE", "DISK_STATE_FILE", "NET_STATE_FILE", "EBOOK_STATE_FILE"):
+        for key in ("PERF_STATE_FILE", "DISK_STATE_FILE", "NET_STATE_FILE", "DOC_STATE_FILE"):
             self.write(key, {"updated": ts(2)})
         monitors = mc.get_status()["engine"]["monitors"]
         self.assertTrue(all(monitors.values()), monitors)
@@ -104,6 +104,14 @@ class GetStatusTests(unittest.TestCase):
         status = mc.get_status()
         self.assertFalse(status["engine"]["monitors"]["process"])
         self.assertEqual(status["engine"]["pid"], 1234)
+
+    def test_document_state_and_config_are_passed_through(self):
+        self.write("DOC_STATE_FILE", {"updated": ts(3), "total": 340.15, "target": 400,
+                                      "percent_of_target": 85.0, "current_level": "warning"})
+        status = mc.get_status()
+        self.assertTrue(status["engine"]["monitors"]["document"])
+        self.assertEqual(status["document"]["current_level"], "warning")
+        self.assertEqual(status["config"]["document"]["target"], 400)
 
     def test_stale_performance_state_marks_monitor_down(self):
         self.write("PERF_STATE_FILE", {"updated": ts(600)})

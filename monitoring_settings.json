@@ -271,15 +271,54 @@
       ]
     }
   ],
-  "ebook_sales": {
-    "display_name": "Total Ebook Sales",
-    "target_usd": 400,
-    "check_interval_sec": 60,
-    "xlsx_path": "sample_data\\ebook_sales_sample.xlsx",
-    "sheet_name": "Actual",
-    "subtype_column": "Subtype",
-    "data_column": "Out",
-    "filter_value": "Ebook"
+  "document": {
+    "display_name": "Groceries spend (monthly budget)",
+    "path": "sample_data\\monthly_budget_sample.csv",
+    "filter_column": "Category",
+    "filter_value": "Groceries",
+    "value_column": "Amount",
+    "target": 400,
+    "unit": "$",
+    "check_interval_sec": 30,
+    "thresholds": [
+      {
+        "level": "warning",
+        "condition": "above",
+        "percent_of_target": 80,
+        "description": "Groceries spend above 80% of the monthly budget",
+        "actions": [
+          {
+            "type": "log_to_file",
+            "level": "warning",
+            "message_template": "[{timestamp}] WARNING DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"
+          }
+        ]
+      },
+      {
+        "level": "critical",
+        "condition": "above",
+        "percent_of_target": 100,
+        "description": "Groceries budget used up",
+        "actions": [
+          {
+            "type": "log_to_file",
+            "level": "critical",
+            "message_template": "[{timestamp}] CRITICAL DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"
+          },
+          {
+            "type": "popup",
+            "title": "Budget alert: {document}",
+            "message_template": "{document} is at {unit}{current_value}, {current_percent}% of the {unit}{target} budget."
+          },
+          {
+            "type": "email_draft",
+            "to": "{global.email_recipient}",
+            "subject_template": "[CRITICAL] {document} over budget on {hostname} — {timestamp}",
+            "body_template": "Document: {document}\nTimestamp: {timestamp}\nCurrent total: {unit}{current_value}\nTarget: {unit}{target}\nUsed: {current_percent}%\nThreshold: {percent_of_target}%\n\nReview the spending in the source file."
+          }
+        ]
+      }
+    ]
   },
   "others": {
     "_comment": "Pending to define. Add new monitoring sections here following the same pattern: name, check_interval_sec, thresholds [ { level, condition/value, actions [] } ]",

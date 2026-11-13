@@ -16,7 +16,7 @@ $MONITORS = @(
     [ordered]@{ Label = 'Performance Monitor';  File = 'performance_monitor.ps1' }
     [ordered]@{ Label = 'Disk Monitor';         File = 'monitor_disk.ps1'        }
     [ordered]@{ Label = 'Network Monitor';      File = 'monitor_network.ps1'     }
-    [ordered]@{ Label = 'Ebook Sales Monitor';  File = 'monitor_ebook_sales.ps1' }
+    [ordered]@{ Label = 'Document Monitor';     File = 'monitor_document.ps1'    }
 )
 
 $DIVIDER = '  ' + ('=' * 50)
