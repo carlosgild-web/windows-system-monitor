@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- A generic **document monitor** replaces Ebook Sales: it sums a filtered column of a `.csv` (no Excel needed) or
+  `.xlsx` file and alerts when the total goes `above` or `below` a percent of a target, with the same actions,
+  hysteresis and email cooldown as the other monitors. The default watches a made-up monthly budget CSV.
+
 ### Fixed
 - A metric hovering around a threshold no longer opens a new email draft every time it dips and comes back. CPU,
   memory, disk and network alerts use hysteresis (optional `clear_margin` / `clear_sec` per threshold), and
@@ -13,6 +18,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   `logs/alert_state.json` so it survives restarts.
 
 ### Changed
+- **Breaking:** the `ebook_sales` config section is replaced by `document` (the doctor warns if it is still
+  present); see the upgrade note in `docs/configuration.md`. The doctor checks for Excel only when the document is
+  a workbook.
 - The four alert actions live once in `scripts/lib/MonitorActions.ps1` instead of being copied into each monitor.
   Side effects: template values containing `$` are inserted literally, the email recipient is escaped in every
   monitor, and rotated logs are always named `monitor.<timestamp>.log`.

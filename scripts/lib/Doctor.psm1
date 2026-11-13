@@ -21,7 +21,7 @@ $MonitorDefs = [ordered]@{
     performance = @{ Script = 'performance_monitor.ps1'; State = 'performance_state.json'; Section = 'performance' }
     disk        = @{ Script = 'monitor_disk.ps1';        State = 'disk_state.json';        Section = 'disk' }
     network     = @{ Script = 'monitor_network.ps1';     State = 'network_state.json';     Section = 'network' }
-    ebook_sales = @{ Script = 'monitor_ebook_sales.ps1'; State = 'ebook_state.json';       Section = 'ebook_sales' }
+    document    = @{ Script = 'monitor_document.ps1';    State = 'document_state.json';    Section = 'document' }
 }
 
 # ---- Small helpers -----------------------------------------------------------
@@ -78,6 +78,12 @@ function Get-ActionGroups ($Config) {
             $k++
         }
     }
+    $j = 0
+    foreach ($t in @($Config.document.thresholds)) {
+        if ($null -eq $t) { continue }
+        $groups += @{ Where = "document.thresholds[$j]"; Section = 'document'; Level = $t.level; Actions = @($t.actions) }
+        $j++
+    }
     return $groups
 }
 
@@ -99,12 +105,6 @@ function Test-DoctorEnvironment {
     $ws = Get-Command wscript -ErrorAction SilentlyContinue
     if ($ws) { $r += New-DoctorResult $cat 'OK' 'wscript available' 'used to launch monitors without a window' }
     else     { $r += New-DoctorResult $cat 'FAIL' 'wscript available' 'Windows Script Host is disabled; start_monitoring cannot launch monitors' }
-
-    if (Test-Path 'Registry::HKEY_CLASSES_ROOT\Excel.Application') {
-        $r += New-DoctorResult $cat 'OK' 'Excel COM registered' 'needed by the ebook sales monitor'
-    } else {
-        $r += New-DoctorResult $cat 'WARN' 'Excel COM registered' 'Microsoft Excel not found; the ebook sales monitor will report an error'
-    }
 
     try {
         $null = Get-Counter '\Processor(_Total)\% Processor Time' -ErrorAction Stop
@@ -230,15 +230,37 @@ function Test-DoctorConfig ($Config) {
         $k++
     }
 
-    # ebook sales
-    $e = $Config.ebook_sales
-    if ($null -ne $e) {
-        if (-not (Test-IsNumber $e.target_usd) -or $e.target_usd -le 0) {
-            $r += New-DoctorResult $cat 'FAIL' 'ebook_sales.target_usd' 'Must be a positive number'; $errors++
+    # document
+    $doc = $Config.document
+    if ($null -ne $doc) {
+        foreach ($f in 'path', 'filter_column', 'filter_value', 'value_column') {
+            if (-not (Test-HasValue $doc $f)) { $r += New-DoctorResult $cat 'FAIL' "document.$f" 'Missing'; $errors++ }
         }
-        if (-not (Test-HasValue $e 'xlsx_path')) {
-            $r += New-DoctorResult $cat 'FAIL' 'ebook_sales.xlsx_path' 'Missing'; $errors++
+        if (-not (Test-IsNumber $doc.target) -or $doc.target -le 0) {
+            $r += New-DoctorResult $cat 'FAIL' 'document.target' 'Must be a positive number'; $errors++
         }
+        if ([string]$doc.path -match '\.xls[xm]?$' -and -not (Test-HasValue $doc 'sheet_name')) {
+            $r += New-DoctorResult $cat 'FAIL' 'document.sheet_name' 'Excel documents need the worksheet name'; $errors++
+        }
+        if ((Test-HasValue $doc 'check_interval_sec') -and (-not (Test-IsNumber $doc.check_interval_sec) -or $doc.check_interval_sec -le 0)) {
+            $r += New-DoctorResult $cat 'FAIL' 'document.check_interval_sec' 'Must be a positive number'; $errors++
+        }
+        $j = 0
+        foreach ($t in @($doc.thresholds)) {
+            if ($null -eq $t) { continue }
+            $where = "document.thresholds[$j]"
+            if (-not (Test-IsNumber $t.percent_of_target) -or $t.percent_of_target -le 0) {
+                $r += New-DoctorResult $cat 'FAIL' "$where.percent_of_target" 'Must be a positive number (percent of document.target)'; $errors++
+            }
+            if ($t.condition -notin @('above', 'below')) {
+                $r += New-DoctorResult $cat 'FAIL' "$where.condition" "'$($t.condition)' must be above or below"; $errors++
+            }
+            $bad = @(Test-ClearSettings $t $where); $r += $bad; $errors += $bad.Count
+            $j++
+        }
+    }
+    if ($null -ne $Config.ebook_sales) {
+        $r += New-DoctorResult $cat 'WARN' 'ebook_sales' 'Replaced by the "document" section in v1.6.0 and ignored; see docs/configuration.md'
     }
 
     # actions (all sections)
@@ -323,12 +345,19 @@ function Test-DoctorPaths ($Config) {
         }
     }
 
-    # ebook workbook
-    $e = $Config.ebook_sales
-    if ($null -ne $e -and $e.xlsx_path) {
-        $xlsx = Resolve-ProjectPath ([string]$e.xlsx_path)
-        if (Test-Path $xlsx) { $r += New-DoctorResult $cat 'OK' 'Ebook workbook' $e.xlsx_path }
-        else { $r += New-DoctorResult $cat 'FAIL' 'Ebook workbook' "Not found: $xlsx" }
+    # document file (+ Excel, only when it is a workbook)
+    $doc = $Config.document
+    if ($null -ne $doc -and $doc.path) {
+        $file = Resolve-ProjectPath ([string]$doc.path)
+        if (Test-Path $file) { $r += New-DoctorResult $cat 'OK' 'Document file' $doc.path }
+        else { $r += New-DoctorResult $cat 'FAIL' 'Document file' "Not found: $file" }
+        if ([string]$doc.path -match '\.xls[xm]?$') {
+            if (Test-Path 'Registry::HKEY_CLASSES_ROOT\Excel.Application') {
+                $r += New-DoctorResult $cat 'OK' 'Excel COM registered' 'needed to read the .xlsx document'
+            } else {
+                $r += New-DoctorResult $cat 'WARN' 'Excel COM registered' 'Microsoft Excel not found; use a .csv document or install Excel'
+            }
+        }
     }
 
     # drives
@@ -365,7 +394,7 @@ function Test-DoctorRuntime ($Config) {
         if ($null -eq $Config.($def.Section)) { continue }
         $stem  = [System.IO.Path]::GetFileNameWithoutExtension($def.Script)
         $alive = @($procs | Where-Object { $_.Name -like 'power*' -and $_.CommandLine -like "*$stem*" })
-        $stateFile = if ($key -in @('process', 'ebook_sales')) { Join-Path $MonitorProjectRoot "logs\$($def.State)" } else { Join-Path $logDir $def.State }
+        $stateFile = if ($key -eq 'process') { Join-Path $MonitorProjectRoot "logs\$($def.State)" } else { Join-Path $logDir $def.State }
 
         if ($alive.Count -eq 0) {
             $r += New-DoctorResult $cat 'WARN' "$key monitor" 'Not running (start it with start_monitoring.bat)'

@@ -5,7 +5,8 @@ BeforeDiscovery {
     $root    = Resolve-Path (Join-Path $PSScriptRoot '..\..')
     $scripts = Get-ChildItem -Path (Join-Path $root 'scripts') -Recurse -Include '*.ps1', '*.psm1' |
         ForEach-Object { @{ Name = $_.FullName.Substring($root.Path.Length + 1); Path = $_.FullName } }
-    $monitors = 'process_monitor.ps1', 'performance_monitor.ps1', 'monitor_disk.ps1', 'monitor_network.ps1' |
+    $monitors = 'process_monitor.ps1', 'performance_monitor.ps1', 'monitor_disk.ps1', 'monitor_network.ps1',
+                'monitor_document.ps1' |
         ForEach-Object { @{ Name = $_; Path = Join-Path $root "scripts\$_" } }
 }
 

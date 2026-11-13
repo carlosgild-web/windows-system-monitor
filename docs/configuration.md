@@ -8,7 +8,7 @@ hand or with the settings editor (`start_editor.bat`, http://localhost:5757). Af
 3. Restart with `start_monitoring.bat`. Monitors read the file at startup, and the launcher's preflight blocks a
    broken config before stopping the monitors that are already running.
 
-Relative paths (`global.log_file`, `global.scripts_dir`, `ebook_sales.xlsx_path`) are resolved against the project
+Relative paths (`global.log_file`, `global.scripts_dir`, `document.path`) are resolved against the project
 folder, so the repository works wherever it is cloned.
 
 ---
@@ -23,7 +23,7 @@ folder, so the repository works wherever it is cloned.
   "performance": { "cpu": {...}, "memory": {...} },
   "disk":        [ ...drives... ],
   "network":     [ ...hosts / ports... ],
-  "ebook_sales": { ...spreadsheet metric... },
+  "document":    { ...one number from a CSV or Excel file... },
   "others":      { reserved for future monitor types }
 }
 ```
@@ -103,20 +103,53 @@ A drive that is not present is reported as `unknown` in the console, and the doc
 - `protocol` is `icmp` (ping) or `tcp` (TCP connect to `port`, which is required for `tcp`).
 - Each threshold needs either `latency_ms` or `"condition": "unreachable"`.
 
-## `ebook_sales`
+## `document`
 
-A business metric read from a spreadsheet. It's included to show that the same pattern works for non-system data.
+One number from a file, watched like a metric: the sum of `value_column` over the rows where `filter_column`
+equals `filter_value`, compared with `target`. It shows that the same thresholds and actions work for business data,
+not just system metrics. The default watches a made-up monthly budget.
+
+```json
+"document": {
+  "display_name": "Groceries spend (monthly budget)",
+  "path": "sample_data\\monthly_budget_sample.csv",
+  "filter_column": "Category", "filter_value": "Groceries", "value_column": "Amount",
+  "target": 400, "unit": "$", "check_interval_sec": 30,
+  "thresholds": [
+    { "level": "warning",  "condition": "above", "percent_of_target": 80,  "actions": [ ... ] },
+    { "level": "critical", "condition": "above", "percent_of_target": 100, "actions": [ ... ] }
+  ]
+}
+```
 
 | Field | Description |
 |---|---|
-| `xlsx_path` | Workbook path (default: `sample_data\ebook_sales_sample.xlsx`, made-up data). |
-| `sheet_name` | Worksheet to read. |
-| `subtype_column` / `filter_value` | Rows are included when this column equals this value. |
-| `data_column` | Column that is summed. |
-| `target_usd` | Goal shown as a progress bar in the console. |
-| `check_interval_sec` | Seconds between reads. |
+| `path` | `.csv` (no Excel needed) or `.xlsx`/`.xlsm` (needs Microsoft Excel). Relative to the project folder. |
+| `sheet_name` | Worksheet to read. Excel files only. |
+| `filter_column` / `filter_value` | Rows are included when this column equals this value (not case-sensitive). |
+| `value_column` | Column that is summed. Cells that are not numbers are skipped. |
+| `target` | The 100 % mark for `percent_of_target`. |
+| `unit` | Optional text shown before values, such as `$`. |
+| `check_interval_sec` | Seconds between reads. Settings are re-read every cycle, so changes apply without a restart. |
 
-This monitor needs Microsoft Excel (COM automation) and reports progress only; it has no thresholds or actions.
+**Thresholds** use `percent_of_target` and a `condition`:
+
+- `"above"`: bad when the total grows (a spend, an error count). Fires at `total >= percent_of_target % of target`.
+- `"below"`: bad when the total falls short (a sales goal, a stock level). Fires at `total < percent_of_target % of target`.
+
+The incident closes once the total is `clear_margin` points (default 5) back on the good side, after `clear_sec`
+(default 0, because the file only changes when someone saves it).
+
+**CSV files**: comma or semicolon delimited (detected from the header), UTF-8 with or without a BOM. Numbers may use
+a decimal point (`1,234.50`) or a decimal comma (`12,50`).
+
+**Excel files** are read through Excel COM in a short-lived child process (`scripts/lib/Read-XlsxTotal.ps1`), which is
+slow (seconds per read) and needs Office. The made-up `sample_data/ebook_sales_sample.xlsx` works with
+`"sheet_name": "Actual"`, `"filter_column": "Subtype"`, `"filter_value": "Ebook"`, `"value_column": "Out"` and a
+`"below"` threshold, like the v1.5 Ebook Sales monitor.
+
+> **Upgrading from v1.5:** the `ebook_sales` section is replaced by `document` and is ignored (the doctor warns).
+> `xlsx_path` → `path`, `subtype_column` → `filter_column`, `data_column` → `value_column`, `target_usd` → `target`.
 
 ---
 
@@ -196,10 +229,12 @@ start long-running work with `Start-Process`.
 | `{hostname}` | all | Computer name |
 | `{global.<field>}` | all | Any field of `global`, e.g. `{global.email_recipient}` |
 | `{proc_name}`, `{proc_display}` | processes | Executable and display name |
-| `{current_value}` | performance, disk, network | Measured value (%, % used, or ms / `unreachable`) |
+| `{current_value}` | performance, disk, network, document | Measured value (%, % used, ms / `unreachable`, or the document total) |
 | `{percent}`, `{sustain_sec}` | performance | Threshold settings |
 | `{percent_used}`, `{free_gb}` | disk | Threshold and current free space |
 | `{host}`, `{port}`, `{latency_ms}` | network | Target and latency threshold |
+| `{document}`, `{target}`, `{unit}` | document | Display name, target and unit |
+| `{current_percent}`, `{percent_of_target}` | document | Total as % of target, and the threshold |
 
 ---
 
@@ -213,7 +248,7 @@ Each monitor writes a JSON state file to `logs/` on every cycle. The console rea
 | performance | `performance_state.json` | `metrics[]`: `current_value`, `current_level` |
 | disk | `disk_state.json` | `drives[]`: `percent_used`, `free_gb`, `current_level` |
 | network | `network_state.json` | `hosts[]`: `reachable`, `latency_ms`, `current_level` |
-| ebook sales | `ebook_state.json` | `total_sales`, `target_usd`, `error` |
+| document | `document_state.json` | `total`, `target`, `percent_of_target`, `current_level`, `error` |
 
 Every file has an `updated` timestamp. The console and the doctor treat a monitor as alive only while
 `now - updated < 2 × check interval + 15 s`.

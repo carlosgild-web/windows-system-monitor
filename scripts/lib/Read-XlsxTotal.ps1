@@ -5,7 +5,7 @@
     equals a filter value, and prints the result as one line of JSON:
         {"total": 359.89, "error": null}
 .DESCRIPTION
-    Run by monitor_ebook_sales.ps1 as a short-lived child process, once per
+    Run by the document monitor (DocumentReader.ps1) as a short-lived child process, once per
     read. Excel (COM automation) only exits when the PowerShell process that
     drove it ends normally; doing the read in its own process guarantees that
     no hidden EXCEL.EXE is left behind, even if the monitor is force-stopped.

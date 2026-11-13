@@ -33,7 +33,12 @@ Describe 'Test-DoctorConfig detects <Case>' -ForEach @(
     @{ Case = 'an unknown level';              Check = 'disk[0].thresholds[0].level';                Mutate = { param($c) $c.disk[0].thresholds[0].level = 'info' } }
     @{ Case = 'run_script without a path';     Check = 'performance.cpu.thresholds[1].actions[2] (run_script)'; Mutate = { param($c) $c.performance.cpu.thresholds[1].actions[2].PSObject.Properties.Remove('path') } }
     @{ Case = 'email_draft without a subject'; Check = 'performance.cpu.thresholds[1].actions[1] (email_draft)'; Mutate = { param($c) $c.performance.cpu.thresholds[1].actions[1].PSObject.Properties.Remove('subject_template') } }
-    @{ Case = 'a zero ebook target';           Check = 'ebook_sales.target_usd';                     Mutate = { param($c) $c.ebook_sales.target_usd = 0 } }
+    @{ Case = 'a zero document target';        Check = 'document.target';                            Mutate = { param($c) $c.document.target = 0 } }
+    @{ Case = 'a document without a column';   Check = 'document.value_column';                      Mutate = { param($c) $c.document.PSObject.Properties.Remove('value_column') } }
+    @{ Case = 'a workbook without a sheet';    Check = 'document.sheet_name';                        Mutate = { param($c) $c.document.path = 'data\book.xlsx' } }
+    @{ Case = 'an unknown document condition'; Check = 'document.thresholds[0].condition';           Mutate = { param($c) $c.document.thresholds[0].condition = 'over' } }
+    @{ Case = 'a zero percent_of_target';      Check = 'document.thresholds[1].percent_of_target';   Mutate = { param($c) $c.document.thresholds[1].percent_of_target = 0 } }
+    @{ Case = 'an unknown document action';    Check = 'document.thresholds[1].actions[0].type';     Mutate = { param($c) $c.document.thresholds[1].actions[0].type = 'sms' } }
     @{ Case = 'a negative email cooldown';     Check = 'global.email_cooldown_min';                  Mutate = { param($c) $c.global.email_cooldown_min = -5 } }
     @{ Case = 'a negative clear_margin';       Check = 'performance.cpu.thresholds[1].clear_margin'; Mutate = { param($c) $c.performance.cpu.thresholds[1] | Add-Member clear_margin -5 } }
     @{ Case = 'a non-numeric disk clear_sec';  Check = 'disk[0].thresholds[0].clear_sec';            Mutate = { param($c) $c.disk[0].thresholds[0] | Add-Member clear_sec 'soon' } }
@@ -44,6 +49,14 @@ Describe 'Test-DoctorConfig detects <Case>' -ForEach @(
         & $Mutate $cfg
         $fails = Get-Status (Test-DoctorConfig $cfg) 'FAIL'
         $fails.Check | Should -Contain $Check
+    }
+}
+
+Describe 'Test-DoctorConfig migration' {
+    It 'warns that a v1.5 ebook_sales section is ignored' {
+        $cfg = New-TestConfig
+        $cfg | Add-Member ebook_sales ([pscustomobject]@{ xlsx_path = 'x.xlsx' })
+        (Get-Status (Test-DoctorConfig $cfg) 'WARN').Check | Should -Contain 'ebook_sales'
     }
 }
 
@@ -90,9 +103,16 @@ Describe 'Test-DoctorPaths' {
         ($results | Where-Object Check -eq 'Log folder').Status | Should -Be 'WARN'
     }
 
-    It 'fails when the ebook workbook is missing' {
-        $cfg.ebook_sales.xlsx_path = Join-Path $TestDrive 'missing.xlsx'
-        (Get-Status (Test-DoctorPaths $cfg) 'FAIL').Check | Should -Contain 'Ebook workbook'
+    It 'fails when the document file is missing' {
+        $cfg.document.path = Join-Path $TestDrive 'missing.csv'
+        (Get-Status (Test-DoctorPaths $cfg) 'FAIL').Check | Should -Contain 'Document file'
+    }
+
+    It 'checks for Excel only when the document is a workbook' {
+        ($results = Test-DoctorPaths $cfg) | Out-Null
+        $results.Check | Should -Not -Contain 'Excel COM registered'
+        $cfg.document.path = 'sample_data\book.xlsx'
+        (Test-DoctorPaths $cfg).Check | Should -Contain 'Excel COM registered'
     }
 
     It 'warns when a configured drive is not present' {

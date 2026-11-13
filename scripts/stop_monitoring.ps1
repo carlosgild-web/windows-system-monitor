@@ -17,7 +17,8 @@ $MONITOR_SCRIPTS = @(
     'performance_monitor',
     'monitor_disk',
     'monitor_network',
-    'monitor_ebook_sales',
+    'monitor_document',
+    'monitor_ebook_sales',      # v1.5 name; still stopped so an upgrade leaves nothing behind
     'monitoring_console'
 )
 
@@ -85,7 +86,7 @@ if ($stoppedPids.Count -gt 0) {
     }
 }
 
-# (Excel is not handled here: the ebook monitor reads workbooks in a short-lived
+# (Excel is not handled here: the document monitor reads workbooks in a short-lived
 # child process, Read-XlsxTotal.ps1, which is not stopped and exits on its own,
 # so Excel always shuts down cleanly.)
 
