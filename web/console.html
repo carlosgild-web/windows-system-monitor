@@ -538,9 +538,22 @@ function showModal(p){
   document.getElementById('m-chips').innerHTML=acts.map(a=>`<span class="chip">${ico(ACT_ICON[a]||'info')}${esc(ACT_LABEL[a]||a)}</span>`).join('');
   document.getElementById('m-note').textContent=p.instructions||
     (p.display_name+' ('+p.name+') is not running. Start it to clear the alert.');
-  document.getElementById('overlay').classList.add('open');
+  openDialog('overlay');
 }
-function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
+// Dialogs: move focus inside on open, give it back to the button that opened them on close.
+let _returnFocus=null;
+function openDialog(id){
+  _returnFocus=document.activeElement;
+  const ov=document.getElementById(id); ov.classList.add('open');
+  const btn=ov.querySelector('[aria-label="Close"]'); if(btn) btn.focus();
+}
+function closeDialog(id){
+  const ov=document.getElementById(id); if(!ov.classList.contains('open')) return;
+  ov.classList.remove('open');
+  if(_returnFocus&&_returnFocus.focus) _returnFocus.focus();
+  _returnFocus=null;
+}
+function closeModal(){ closeDialog('overlay'); }
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeDet(); _hideTt(); } });
 
 async function ctrlMonitor(action, key){
@@ -570,8 +583,8 @@ async function ctrlMonitor(action, key){
 let _detData=null, _detTab='settings';
 const DET_TABS=[['settings','sliders','Settings'],['processes','process','Processes'],['performance','cpu','Performance'],
   ['disk','disk','Disk'],['network','network','Network'],['document','document','Document']];
-function showDetails(){ if(!_detData) return; _detRender(_detData); document.getElementById('det-ov').classList.add('open'); }
-function closeDet(){ document.getElementById('det-ov').classList.remove('open'); }
+function showDetails(){ if(!_detData) return; _detRender(_detData); openDialog('det-ov'); }
+function closeDet(){ closeDialog('det-ov'); }
 function _detRender(d){
   const cfg=d.config||{};
   document.getElementById('det-tabs').innerHTML=DET_TABS.map(([t,i,l])=>
