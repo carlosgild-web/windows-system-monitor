@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- A **Docker demo**: `docker compose up --build` runs the real console and settings editor on any OS, fed by
+  `docker/simulator.py` (simulated CPU, memory, disk and public hosts; the budget CSV and localhost checks are real).
+  Non-root, standard library only, published on 127.0.0.1. A CI job builds it and runs `docker/smoke_test.py`.
+  [docs/docker.md](docs/docker.md) explains why the PowerShell monitors themselves can't run in a container.
 - A **portfolio demo banner** on the console: what the project is, a "How this demo works" panel (what it is, how
   the pieces fit, things to try) and an **Open Monitoring settings** button that starts the settings editor in the
   background if needed (`POST /api/open-editor`, same-origin only) and opens it in a new tab. The banner can be

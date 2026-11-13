@@ -93,33 +93,26 @@ Without this, any web page open in the browser could rewrite the settings, inclu
 amounts to code execution. It could also stop the monitors, or use `/api/open-file` to launch arbitrary files.
 `/api/open-file` now only opens spreadsheets inside the project folder. Tests cover each case.
 
-## 9. Why not Docker?
+## 9. Docker: a demo container, not containerized monitoring
 
-I looked at containerizing the project and decided against it for now. Two parts behave very differently:
+The monitors watch the Windows machine they run on: its processes, perf counters, drive letters, desktop and Excel.
+A container is built to be isolated from exactly that, and Windows 11 Home only runs Linux containers anyway. So the
+monitors stay a native install.
 
-| Component | Container readiness |
-|---|---|
-| `server.py`, `monitoring_console.py` | Nearly ready: standard library only. They'd only need the browser auto-open and `os.startfile` made optional. |
-| Process / performance / disk monitors | Blocked: Windows performance counters and WMI (`Win32_OperatingSystem`, `Win32_LogicalDisk`) don't exist in Linux containers, and a container can't see the host's processes or drive letters anyway. |
-| Document monitor | CSV mode: plain file reading. Excel mode: COM automation needs Office on the host. |
-| Launchers | Blocked: `.bat` files and `wscript` are Windows-only. |
+What did containerize cleanly is the part that never depended on Windows: the stdlib console and editor. Because the
+monitors and the UI only exchange JSON state files (section 2), a small simulator can stand in for the monitors.
 
-The options were:
+- **Why:** anyone can try the real UI on any OS with `docker compose up`, and CI proves it on Linux.
+- **How:** one image with three processes sharing one copy of the files (simulator, editor, console). Off Windows the
+  console is read-only. Ports are published on `127.0.0.1` only, so the Host/Origin checks keep working.
+- **Cost:** the container shows simulated system metrics, and says so in its banner. Only the document monitor and the
+  localhost network checks are real there.
 
-- **Windows container** (`servercore`): runs mostly unchanged, but the images are 3–5 GB, it needs a Windows Docker host,
-  COM in containers is unreliable, and Office licensing is complicated. Good for a proof of concept only.
-- **Linux container**: clean and small, but it means rewriting the collectors on `psutil`, the document monitor's Excel
-  mode on `openpyxl`, the network checks on `socket`, and the launchers as a Python process manager. That's an estimated 1–2 days.
-
-The tool's job is to watch the Windows machine it runs on: its processes, its drives, its desktop. A container
-would isolate it from exactly what it monitors. The useful first step is portability rather than containers:
-moving the collectors to `psutil`/`openpyxl` removes the Office dependency on its own and would make a Linux
-container a small follow-up. (The analysis also flagged hard-coded absolute paths; those are now resolved
-relative to the project folder.)
+The full explanation is in [docker.md](docker.md).
 
 ## Known limitations
 
-- **Windows-only by design.** See section 9.
+- **Windows-only by design.** The Docker image is a demo with simulated monitors; see section 9.
 - **`.xlsx` documents use Excel COM.** Each read starts Excel, which is slow (seconds) and requires Office; CSV
   documents avoid it entirely, which is why the default is a CSV. The Excel read runs in a short-lived child process
   (`scripts/lib/Read-XlsxTotal.ps1`), because Excel only exits when the process that drove it ends normally.

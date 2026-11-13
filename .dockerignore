@@ -1,0 +1,12 @@
+# Only what the demo image copies is needed; keep the build context small and private.
+.git
+.github
+logs
+tests
+scripts
+docs
+art
+*.bat
+*.vbs
+*.xlsx
+**/__pycache__
