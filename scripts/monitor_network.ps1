@@ -57,11 +57,9 @@ $cfg = Get-MonitorSettings
 
 $state = @{}
 foreach ($h in $cfg.network) {
-    $perLevelCounts = @{}
-    foreach ($t in $h.thresholds) { $perLevelCounts[$t.level] = 0 }
     $state[$h.name] = @{
         LastChecked  = $null
-        AlertCounts  = $perLevelCounts
+        Trackers     = @{}      # level -> incident tracker (see Invoke-ThresholdAlerts)
         LastResult   = $null
         LastLevel    = 'ok'
         LastCheckStr = $null
@@ -120,25 +118,27 @@ while ($true) {
         }
         $hs.LastLevel = $currentLevel
 
-        # Fire actions per threshold, highest applicable only
-        $sorted = @($h.thresholds | Sort-Object { if ($_.level -eq 'warning') { 0 } else { 1 } })
-
-        $highestExceededLevel = $null
-        foreach ($t in $sorted) {
-            if ($t.condition -eq 'unreachable' -and -not $result.Reachable) {
-                $highestExceededLevel = $t.level
-            } elseif ($null -ne $t.latency_ms -and $result.Reachable -and $null -ne $result.LatencyMs -and $result.LatencyMs -ge $t.latency_ms) {
-                $highestExceededLevel = $t.level
-            }
-        }
-
-        foreach ($t in $sorted) {
-            $lvl      = $t.level
-            $exceeded = ($t.condition -eq 'unreachable' -and -not $result.Reachable) -or
-                        ($null -ne $t.latency_ms -and $result.Reachable -and $null -ne $result.LatencyMs -and $result.LatencyMs -ge $t.latency_ms)
-
-            if ($exceeded -and $lvl -eq $highestExceededLevel) {
-                $templateVars = @{
+        # Hysteresis: "unreachable" closes once the host answers again; a latency incident
+        # closes once latency stays clear_margin ms under the threshold (default 20% of it).
+        # Either way the good state must hold for clear_sec (default: one check interval).
+        $latency = if ($result.Reachable) { $result.LatencyMs } else { $null }
+        $checks = foreach ($t in (Get-ThresholdsLowFirst $h.thresholds)) {
+            if ($t.condition -eq 'unreachable') {
+                $exceeded   = -not $result.Reachable
+                $belowClear = [bool]$result.Reachable
+            } elseif ($null -ne $t.latency_ms) {
+                $margin     = Get-ClearSetting $t 'clear_margin' ([double]$t.latency_ms * 0.2)
+                $exceeded   = ($null -ne $latency -and $latency -ge $t.latency_ms)
+                $belowClear = ($null -ne $latency -and $latency -lt ($t.latency_ms - $margin))
+            } else { continue }
+            @{
+                Level      = $t.level
+                Actions    = $t.actions
+                Exceeded   = $exceeded
+                BelowClear = $belowClear
+                SustainSec = 0
+                ClearSec   = (Get-ClearSetting $t 'clear_sec' $interval)
+                Vars       = @{
                     timestamp     = $now.ToString('yyyy-MM-dd HH:mm:ss')
                     hostname      = $hostname
                     host          = [string]$h.host
@@ -148,13 +148,10 @@ while ($true) {
                     # monitors; the measured value is {current_value}.
                     latency_ms    = if ($null -ne $t.latency_ms) { [string]$t.latency_ms } else { 'N/A' }
                 }
-                $suppress = ($hs.AlertCounts[$lvl] -gt 0)
-                Invoke-MonitorActions -Actions $t.actions -Vars $templateVars -GlobalCfg $cfg.global -SuppressSpam:$suppress
-                $hs.AlertCounts[$lvl]++
-            } elseif (-not $exceeded) {
-                $hs.AlertCounts[$lvl] = 0
             }
         }
+        $null = Invoke-ThresholdAlerts -Checks @($checks) -Trackers $hs.Trackers -Now $now `
+            -GlobalCfg $cfg.global -KeyPrefix "network|$($h.name)"
 
         $hostsOutput.Add([ordered]@{
             name          = $h.name

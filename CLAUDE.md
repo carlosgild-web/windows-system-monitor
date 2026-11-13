@@ -74,6 +74,10 @@ doctor afterwards. Full reference: `docs/configuration.md`.
   every other section uses `message_template`. The editor enforces this in `actionFields()`; the doctor checks it.
 - **Levels:** `warning` → `popup`, `log_to_file`; `critical` → may also use `email_draft`, `run_script`.
 - **Spam guard (all monitors):** repeat alerts run only `log_to_file` and `run_script`.
+- **Incidents (CPU/memory/disk/network):** `Invoke-ThresholdAlerts` opens an incident after `sustain_sec` and closes it
+  only after the value stays below `threshold - clear_margin` for `clear_sec` (optional per-threshold fields).
+- **Email cooldown:** one `email_draft` per `monitor|item|level` per `global.email_cooldown_min` (default 60),
+  persisted in `logs/alert_state.json` (shared by all monitor processes, guarded by a named mutex).
 - **Template variables:** `{timestamp}`, `{hostname}`, `{global.<field>}` everywhere; `{proc_name}`, `{proc_display}`
   (processes); `{current_value}`, `{percent}`, `{sustain_sec}` (CPU/memory); `{current_value}`, `{percent_used}`,
   `{free_gb}` (disk); `{host}`, `{port}`, `{current_value}`, `{latency_ms}` (network; `{latency_ms}` is the threshold).

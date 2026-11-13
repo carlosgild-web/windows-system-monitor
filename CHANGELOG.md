@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+- A metric hovering around a threshold no longer opens a new email draft every time it dips and comes back. CPU,
+  memory, disk and network alerts use hysteresis (optional `clear_margin` / `clear_sec` per threshold), and
+  `email_draft` is limited to one per item and level per `global.email_cooldown_min` (default 60), saved in
+  `logs/alert_state.json` so it survives restarts.
+
 ### Changed
 - The four alert actions live once in `scripts/lib/MonitorActions.ps1` instead of being copied into each monitor.
   Side effects: template values containing `$` are inserted literally, the email recipient is escaped in every

@@ -67,19 +67,12 @@ $metricDefs = @(
 
 $state = @{}
 foreach ($m in $metricDefs) {
-    $perLevel = @{}
-    $perLevelCounts = @{}
-    foreach ($t in $m.Config.thresholds) {
-        $perLevel[$t.level]       = $null
-        $perLevelCounts[$t.level] = 0
-    }
     $state[$m.Name] = @{
-        LastChecked         = $null
-        AboveThresholdSince = $perLevel
-        AlertCounts         = $perLevelCounts
-        LastValue           = $null
-        LastLevel           = 'ok'
-        LastCheckStr        = $null
+        LastChecked  = $null
+        Trackers     = @{}      # level -> incident tracker (see Invoke-ThresholdAlerts)
+        LastValue    = $null
+        LastLevel    = 'ok'
+        LastCheckStr = $null
     }
 }
 
@@ -107,39 +100,29 @@ while ($true) {
         $ms.LastValue = $value
         $ms.LastLevel = Get-ImmediateLevel -Value $value -Thresholds $mcfg.thresholds
 
-        # Thresholds sorted warning-first so critical is last (and wins as highestExceeded)
-        $sorted = @($mcfg.thresholds | Sort-Object { if ($_.level -eq 'warning') { 0 } else { 1 } })
-
-        $highestExceededLevel = $null
-        foreach ($t in $sorted) {
-            if ($null -ne $t.percent -and $value -ge $t.percent) { $highestExceededLevel = $t.level }
-        }
-
-        foreach ($t in $sorted) {
-            $lvl = $t.level
-            if ($null -ne $t.percent -and $value -ge $t.percent) {
-                if ($null -eq $ms.AboveThresholdSince[$lvl]) {
-                    $ms.AboveThresholdSince[$lvl] = $now
+        # Hysteresis: an incident closes only after the value stays clear_margin points under
+        # the threshold (default 5) for clear_sec (default: the threshold's sustain_sec).
+        $checks = foreach ($t in (Get-ThresholdsLowFirst $mcfg.thresholds)) {
+            if ($null -eq $t.percent) { continue }
+            $sustain = [double]$t.sustain_sec
+            @{
+                Level      = $t.level
+                Actions    = $t.actions
+                Exceeded   = ($value -ge $t.percent)
+                BelowClear = ($value -lt ($t.percent - (Get-ClearSetting $t 'clear_margin' 5)))
+                SustainSec = $sustain
+                ClearSec   = (Get-ClearSetting $t 'clear_sec' ([math]::Max($sustain, [double]$mcfg.check_interval_sec)))
+                Vars       = @{
+                    timestamp     = $now.ToString('yyyy-MM-dd HH:mm:ss')
+                    hostname      = $hostname
+                    current_value = [string][math]::Round($value, 1)
+                    percent       = [string]$t.percent
+                    sustain_sec   = [string]$t.sustain_sec
                 }
-                $sustainedSec = ($now - $ms.AboveThresholdSince[$lvl]).TotalSeconds
-                # Only fire the highest exceeded threshold to avoid duplicate alerts
-                if ($sustainedSec -ge $t.sustain_sec -and $lvl -eq $highestExceededLevel) {
-                    $templateVars = @{
-                        timestamp     = $now.ToString('yyyy-MM-dd HH:mm:ss')
-                        hostname      = $hostname
-                        current_value = [string][math]::Round($value, 1)
-                        percent       = [string]$t.percent
-                        sustain_sec   = [string]$t.sustain_sec
-                    }
-                    $suppress = ($ms.AlertCounts[$lvl] -gt 0)
-                    Invoke-MonitorActions -Actions $t.actions -Vars $templateVars -GlobalCfg $cfg.global -SuppressSpam:$suppress
-                    $ms.AlertCounts[$lvl]++
-                }
-            } else {
-                $ms.AboveThresholdSince[$lvl] = $null
-                $ms.AlertCounts[$lvl]         = 0
             }
         }
+        $null = Invoke-ThresholdAlerts -Checks @($checks) -Trackers $ms.Trackers -Now $now `
+            -GlobalCfg $cfg.global -KeyPrefix "performance|$($m.Name)"
     }
 
     if ($stateChanged) {

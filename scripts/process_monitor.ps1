@@ -141,7 +141,7 @@ try {
                     Write-Log "$($proc.display_name) ($($proc.name)) stopped -- firing actions" Red
                     if ($proc.required) {
                         $vars = @{ timestamp = $now.ToString('yyyy-MM-dd HH:mm:ss'); hostname = $env:COMPUTERNAME; proc_name = $proc.name; proc_display = $proc.display_name }
-                        Invoke-MonitorActions -Actions $proc.actions.on_not_running -Vars $vars -GlobalCfg $cfg -SuppressSpam:$false
+                        Invoke-MonitorActions -Actions $proc.actions.on_not_running -Vars $vars -GlobalCfg $cfg -SuppressSpam:$false -AlertKey "process|$($proc.name)"
                         $ps.AlertCount++
                     }
                 }
@@ -151,7 +151,7 @@ try {
                     Write-Log "$($proc.display_name) still NOT running (down $downStr)" Yellow
                     if ($proc.required) {
                         $vars = @{ timestamp = $now.ToString('yyyy-MM-dd HH:mm:ss'); hostname = $env:COMPUTERNAME; proc_name = $proc.name; proc_display = $proc.display_name }
-                        Invoke-MonitorActions -Actions $proc.actions.on_not_running -Vars $vars -GlobalCfg $cfg -SuppressSpam:$true
+                        Invoke-MonitorActions -Actions $proc.actions.on_not_running -Vars $vars -GlobalCfg $cfg -SuppressSpam:$true -AlertKey "process|$($proc.name)"
                         $ps.AlertCount++
                         $stateChanged = $true
                     }
