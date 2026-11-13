@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+- The four alert actions live once in `scripts/lib/MonitorActions.ps1` instead of being copied into each monitor.
+  Side effects: template values containing `$` are inserted literally, the email recipient is escaped in every
+  monitor, and rotated logs are always named `monitor.<timestamp>.log`.
+
 ## [1.5.0] - 2026-11-13
 
 First public release.

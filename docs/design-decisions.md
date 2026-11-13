@@ -30,8 +30,9 @@ Five small PowerShell scripts, each in its own process, each on its own interval
 
 - **Why:** isolation. A slow Excel read in the ebook monitor can't delay CPU sampling. The console can pause and
   resume any single monitor, and a crash affects exactly one area.
-- **Cost:** some code duplication across monitors. The shared parts (settings loading, path resolution, popups) live
-  in `scripts/lib/MonitorCommon.ps1`, and a test checks that every monitor handles every action type.
+- **Cost:** each monitor repeats its own loop and state-file code. Everything else is shared: settings loading, path
+  resolution and popups live in `scripts/lib/MonitorCommon.ps1`, and the four action types live once in
+  `scripts/lib/MonitorActions.ps1`. A test checks that no monitor keeps its own copy of the action code.
 
 ## 4. PowerShell for collection, Python for the UI
 

@@ -192,8 +192,9 @@ Every file has an `updated` timestamp. The console and the doctor treat a monito
 
 ## Adding a monitor type
 
-1. Create `scripts/monitor_<type>.ps1`. Mirror an existing monitor: dot-source `lib\MonitorCommon.ps1`, load with
-   `Get-MonitorSettings`, dispatch all four action types, and write a state file.
+1. Create `scripts/monitor_<type>.ps1`. Mirror an existing monitor: dot-source `lib\MonitorCommon.ps1` and
+   `lib\MonitorActions.ps1`, load with `Get-MonitorSettings`, fire actions with `Invoke-MonitorActions`, and write a
+   state file.
 2. Add it to `$MONITORS` in `scripts/start_monitoring.ps1` and to `$MONITOR_SCRIPTS` in `scripts/stop_monitoring.ps1`.
 3. Add its section to `monitoring_settings.json` and bump `_meta.version`.
 4. Add its state file to `$MonitorDefs` and its schema rules to `Test-DoctorConfig` in `scripts/lib/Doctor.psm1`.

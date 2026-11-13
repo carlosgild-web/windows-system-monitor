@@ -24,93 +24,13 @@ $ErrorActionPreference = 'Continue'
 # ---- Settings ----------------------------------------------------------------
 # Get-MonitorSettings: UTF-8 load + project-relative path resolution
 . (Join-Path $PSScriptRoot 'lib\MonitorCommon.ps1')
-
-# ---- Template substitution ---------------------------------------------------
-function Expand-Template ([string]$Text, [hashtable]$Vars, $GlobalCfg) {
-    if ($GlobalCfg) {
-        foreach ($p in $GlobalCfg.PSObject.Properties) {
-            $Text = $Text -replace [regex]::Escape("{global.$($p.Name)}"), $p.Value
-        }
-    }
-    foreach ($k in $Vars.Keys) {
-        $Text = $Text -replace [regex]::Escape("{$k}"), [string]$Vars[$k]
-    }
-    return $Text
-}
+# Expand-Template / Write-MonitorLog / Invoke-MonitorActions: the shared alert actions
+. (Join-Path $PSScriptRoot 'lib\MonitorActions.ps1')
+$script:MonitorActionTrace = $true   # this monitor can run in a visible console: print each action
 
 # ---- Console logger ----------------------------------------------------------
 function Write-Log ([string]$Message, [ConsoleColor]$Color = 'Gray') {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Message" -ForegroundColor $Color
-}
-
-# ---- Actions -----------------------------------------------------------------
-function Invoke-PopupAction ($Action, [hashtable]$Vars, $GlobalCfg) {
-    $title   = Expand-Template $Action.title        $Vars $GlobalCfg
-    $message = Expand-Template $Action.instructions $Vars $GlobalCfg
-    Show-MonitorPopup $title $message
-    Write-Log "  [popup] $title" Yellow
-}
-
-function Invoke-LogAction ($Action, [hashtable]$Vars, $GlobalCfg) {
-    # 'instructions' is for the console UI — never log its content.
-    # Generate a compact standard line instead. 'message_template' (used by
-    # CPU/memory/disk/network sections) is expanded normally.
-    if ($Action.PSObject.Properties['instructions']) {
-        $ts  = $Vars['timestamp']
-        $lvl = $Action.level.ToUpper()
-        $dn  = $Vars['proc_display']
-        $nm  = $Vars['proc_name']
-        $message = "[$ts] $lvl PROC: $dn ($nm) not detected."
-    } else {
-        $message = Expand-Template $Action.message_template $Vars $GlobalCfg
-    }
-    $logPath = $GlobalCfg.log_file
-    $maxMB   = [int]$GlobalCfg.log_max_size_mb
-    $logDir  = Split-Path $logPath -Parent
-    if ($logDir -and -not (Test-Path $logDir)) {
-        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-    }
-    if ((Test-Path $logPath) -and ((Get-Item $logPath).Length -gt ($maxMB * 1MB))) {
-        $archive = [System.IO.Path]::ChangeExtension($logPath, "$(Get-Date -Format 'yyyyMMdd_HHmmss').log")
-        Rename-Item -Path $logPath -NewName $archive
-    }
-    Add-Content -Path $logPath -Value $message -Encoding UTF8
-    Write-Log "  [log] $message" DarkGray
-}
-
-function Invoke-EmailAction ($Action, [hashtable]$Vars, $GlobalCfg) {
-    $to      = Expand-Template $Action.to               $Vars $GlobalCfg
-    $subject = Expand-Template $Action.subject_template $Vars $GlobalCfg
-    $body    = Expand-Template $Action.body_template    $Vars $GlobalCfg
-    $mailto  = "mailto:$([Uri]::EscapeDataString($to))" +
-               "?subject=$([Uri]::EscapeDataString($subject))" +
-               "&body=$([Uri]::EscapeDataString($body))"
-    try { Start-Process $mailto; Write-Log "  [email_draft] to $to" Cyan }
-    catch { Write-Log "  [email_draft] failed: $_" Red }
-}
-
-function Invoke-ScriptAction ($Action, [hashtable]$Vars, $GlobalCfg) {
-    $path    = Expand-Template $Action.path $Vars $GlobalCfg
-    $argList = @($Action.args | ForEach-Object { Expand-Template $_ $Vars $GlobalCfg })
-    if (-not (Test-Path $path)) { Write-Log "  [run_script] not found: $path" Red; return }
-    try { & $path @argList; Write-Log "  [run_script] $path" DarkGray }
-    catch { Write-Log "  [run_script] failed ($path): $_" Red }
-}
-
-function Invoke-Actions ($Actions, [hashtable]$Vars, $GlobalCfg, [bool]$SuppressSpam) {
-    foreach ($action in $Actions) {
-        if ($SuppressSpam -and $action.type -in @('popup','email_draft')) { continue }
-        try {
-            switch ($action.type) {
-                'popup'       { Invoke-PopupAction  $action $Vars $GlobalCfg }
-                'log_to_file' { Invoke-LogAction    $action $Vars $GlobalCfg }
-                'email_draft' { Invoke-EmailAction  $action $Vars $GlobalCfg }
-                'run_script'  { Invoke-ScriptAction $action $Vars $GlobalCfg }
-                default       { Write-Log "  Unknown action type: $($action.type)" Yellow }
-            }
-        }
-        catch { Write-Log "  Action '$($action.type)' error: $_" Red }
-    }
 }
 
 # ---- State file writer -------------------------------------------------------
@@ -221,7 +141,7 @@ try {
                     Write-Log "$($proc.display_name) ($($proc.name)) stopped -- firing actions" Red
                     if ($proc.required) {
                         $vars = @{ timestamp = $now.ToString('yyyy-MM-dd HH:mm:ss'); hostname = $env:COMPUTERNAME; proc_name = $proc.name; proc_display = $proc.display_name }
-                        Invoke-Actions $proc.actions.on_not_running $vars $cfg -SuppressSpam:$false
+                        Invoke-MonitorActions -Actions $proc.actions.on_not_running -Vars $vars -GlobalCfg $cfg -SuppressSpam:$false
                         $ps.AlertCount++
                     }
                 }
@@ -231,7 +151,7 @@ try {
                     Write-Log "$($proc.display_name) still NOT running (down $downStr)" Yellow
                     if ($proc.required) {
                         $vars = @{ timestamp = $now.ToString('yyyy-MM-dd HH:mm:ss'); hostname = $env:COMPUTERNAME; proc_name = $proc.name; proc_display = $proc.display_name }
-                        Invoke-Actions $proc.actions.on_not_running $vars $cfg -SuppressSpam:$true
+                        Invoke-MonitorActions -Actions $proc.actions.on_not_running -Vars $vars -GlobalCfg $cfg -SuppressSpam:$true
                         $ps.AlertCount++
                         $stateChanged = $true
                     }
@@ -242,11 +162,7 @@ try {
                     $msg     = "[{0}] RECOVERY: {1} is running again (was down {2})." -f `
                                $now.ToString('yyyy-MM-dd HH:mm:ss'), $proc.name, $downStr
                     Write-Log "$($proc.display_name) is running again (was down $downStr)" Green
-                    $logDir = Split-Path $cfg.log_file -Parent
-                    if ($logDir -and -not (Test-Path $logDir)) {
-                        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-                    }
-                    Add-Content -Path $cfg.log_file -Value $msg -Encoding UTF8
+                    Write-MonitorLog $msg $cfg
                     $ps.Running    = $true
                     $ps.DownSince  = $null
                     $ps.AlertCount = 0
