@@ -13,7 +13,7 @@ processes, CPU, memory, disk, network, or a business metric from a spreadsheet. 
 check it on their own schedules, fire escalating actions when something crosses a threshold, and report to a
 live web dashboard.
 
-![Dashboard demo: a process goes down, recovers, and goes down again](docs/screenshots/demo.gif)
+![A tour of the console: overview, the demo guide, a process runbook, dark mode, and the settings editor](docs/screenshots/demo.gif)
 
 ---
 
@@ -30,14 +30,19 @@ live web dashboard.
   ("How this demo works") for anyone trying it out.
 - **Self-diagnosing.** `doctor.bat` checks the environment, config schema, paths and running monitors. The launcher
   runs the same checks before starting anything, so a bad config fails loudly instead of silently.
-- **Tested.** 100+ Pester tests and a Python test suite, run on Windows PowerShell 5.1 in GitHub Actions.
+- **Tested.** 180 Pester tests and 56 Python tests on Windows PowerShell 5.1, plus a Docker smoke test on Linux,
+  in GitHub Actions.
 - **No dependencies beyond Windows and Python.** The web servers use only the Python standard library.
 
 ## Screenshots
 
-| Live console | Process runbook | Settings editor |
+| Live console | Dark mode | How this demo works |
 |---|---|---|
-| [![Console](docs/screenshots/console.png)](docs/screenshots/console.png) | [![Runbook modal](docs/screenshots/console-instructions.png)](docs/screenshots/console-instructions.png) | [![Editor](docs/screenshots/editor.png)](docs/screenshots/editor.png) |
+| [![Console](docs/screenshots/console.png)](docs/screenshots/console.png) | [![Console in dark mode](docs/screenshots/console-dark.png)](docs/screenshots/console-dark.png) | [![The demo guide panel](docs/screenshots/console-guide.png)](docs/screenshots/console-guide.png) |
+
+| Process runbook | Settings editor |
+|---|---|
+| [![Runbook for a stopped process](docs/screenshots/console-runbook.png)](docs/screenshots/console-runbook.png) | [![Editor](docs/screenshots/editor.png)](docs/screenshots/editor.png) |
 
 ## Architecture
 
