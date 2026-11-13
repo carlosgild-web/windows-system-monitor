@@ -4,9 +4,14 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions match
 `_meta.version` in `monitoring_settings.json`.
 
-## [Unreleased]
-
-### Added
+## [Unreleased]
+
+## [1.6.0] - 2026-11-13
+
+A portfolio-ready release: a redesigned UI with a built-in demo guide, a default test environment that works
+on any Windows PC, deduplicated alerts, a generic CSV/Excel document monitor, and a Docker demo.
+
+### Added
 - **Illustrations made with Google Gemini**: an app icon, a picture for the "How this demo works" panel, empty /
   paused / error state art in the console, and the README hero and social preview. Every slot has a fallback, so the
   app works without them; `docs/images.md` and `tools/prepare_images.py` show how to make them again.
@@ -77,5 +82,6 @@ First public release.
 - Config paths are relative to the project folder, so the repo runs from any location.
 - `{latency_ms}` in network templates refers to the threshold, consistent with the other monitors.
 
-[Unreleased]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/carlosgild-web/windows-system-monitor/releases/tag/v1.5.0
