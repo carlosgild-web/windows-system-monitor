@@ -25,7 +25,8 @@
     var buttons = document.querySelectorAll('[data-theme-toggle]');
     for (var i = 0; i < buttons.length; i++) {
       var use = buttons[i].querySelector('use');
-      if (use) use.setAttribute('href', '/static/icons.svg#i-' + ICON[mode]);
+      // keep the page's own sprite path (/static/ in the console, web/static/ in the editor)
+      if (use) use.setAttribute('href', (use.getAttribute('href') || '').split('#')[0] + '#i-' + ICON[mode]);
       buttons[i].title = label;
       buttons[i].setAttribute('aria-label', label);
     }

@@ -48,15 +48,19 @@ STATIC_TYPES = {
 
 
 def resolve_static(url_path: str):
-    """Map /static/<file> to a file inside STATIC_DIR, or None.
+    """Map /static/<file> (or /web/static/<file>) to a file inside STATIC_DIR, or None.
 
     Only known asset types are served, and the resolved path must stay inside
     STATIC_DIR, so /static/../server.py or an encoded traversal returns 404.
     """
     rel = url_path.split("?", 1)[0].split("#", 1)[0]
-    if not rel.startswith("/static/"):
+    # /web/static/ is how the editor links them: relative paths also work from file://
+    for prefix in ("/static/", "/web/static/"):
+        if rel.startswith(prefix):
+            rel = unquote(rel[len(prefix):])
+            break
+    else:
         return None
-    rel = unquote(rel[len("/static/"):])
     if not rel or "\\" in rel or "\x00" in rel:
         return None
     try:
@@ -307,7 +311,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             self._send(CONSOLE_HTML.read_bytes(), "text/html; charset=utf-8")
-        elif self.path.startswith("/static/"):
+        elif self.path.startswith(("/static/", "/web/static/")):
             target = resolve_static(self.path)
             if target is None:
                 return self.send_error(404)

@@ -4,105 +4,144 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Monitoring Settings Editor</title>
+<!-- Relative paths: the page also works when opened straight from disk (offline defaults). -->
+<link rel="icon" href="web/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="web/static/theme.css">
+<script src="web/static/theme.js"></script>
 <style>
-:root{--pri:#2563eb;--dan:#dc2626;--ok:#16a34a;--bg:#f1f5f9;--card:#fff;--bdr:#e2e8f0;--txt:#1e293b;--mut:#64748b;--side:#1e293b}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);display:flex;height:100vh;overflow:hidden}
-#sidebar{width:210px;background:var(--side);flex-shrink:0;display:flex;flex-direction:column}
-#stitle{padding:18px 16px 14px;color:#f8fafc;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #334155}
-#nav{flex:1;overflow-y:auto;padding:6px 0}
-.nb{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 16px;background:none;border:none;border-left:3px solid transparent;color:#94a3b8;font-size:13px;cursor:pointer;text-align:left;transition:all .15s}
-.nb:hover{background:#334155;color:#e2e8f0}
-.nb.on{background:#1e3a5f;color:#fff;border-left-color:var(--pri)}
-.nbg{background:#334155;color:#94a3b8;border-radius:99px;padding:1px 7px;font-size:11px;min-width:20px;text-align:center}
-.nb.on .nbg{background:var(--pri);color:#fff}
-#stools{padding:12px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:6px}
-#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-#topbar{background:#fff;border-bottom:1px solid var(--bdr);padding:11px 24px;display:flex;align-items:center;gap:10px}
-#topbar h2{font-size:16px;font-weight:600;flex:1}
-#dirty{color:#d97706;font-size:12px;display:none}
-#content{flex:1;overflow-y:auto;padding:24px}
-.panel{display:none}.panel.on{display:block}
-.card{background:var(--card);border:1px solid var(--bdr);border-radius:8px;margin-bottom:16px}
-.ch{padding:12px 16px;background:#f8fafc;border-radius:8px;display:flex;align-items:center;gap:8px;cursor:pointer;border-bottom:1px solid transparent;user-select:none}
-.ch.open{border-radius:8px 8px 0 0;border-bottom-color:var(--bdr)}
-.ch:hover{background:#f1f5f9}
-.cv{font-size:11px;color:var(--mut);transition:transform .2s}
-.ch:not(.open) .cv{transform:rotate(-90deg)}
-.ct{font-weight:600;font-size:14px;flex:1}
-.cb{padding:16px;display:none}
-.cb.open{display:block}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
-.full{grid-column:1/-1}
-.fg{display:flex;flex-direction:column;gap:4px}
-label{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
-input[type=text],input[type=number],input[type=email],select,textarea{width:100%;padding:7px 10px;border:1px solid var(--bdr);border-radius:6px;font-size:13px;font-family:inherit;color:var(--txt);background:#fff;transition:border-color .15s}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
-textarea{min-height:68px;resize:vertical;font-family:'Consolas',monospace;font-size:12px}
-.crow{display:flex;align-items:center;gap:8px;padding:6px 0}
-.crow label{text-transform:none;letter-spacing:normal;font-size:13px;color:var(--txt);cursor:pointer;font-weight:400}
-input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--pri);flex-shrink:0}
-.btn{padding:7px 13px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:5px;transition:all .15s;white-space:nowrap}
-.btn:disabled{opacity:.6;cursor:not-allowed}
-.pri{background:var(--pri);color:#fff}.pri:hover:not(:disabled){background:#1d4ed8}
-.ok{background:var(--ok);color:#fff}.ok:hover:not(:disabled){background:#15803d}
-.dan{background:var(--dan);color:#fff}.dan:hover:not(:disabled){background:#b91c1c}
-.ghost{background:#e2e8f0;color:var(--txt)}.ghost:hover:not(:disabled){background:#cbd5e1}
-.sm{padding:4px 9px;font-size:12px}
-.sbtn{width:100%;justify-content:center;background:#334155;color:#cbd5e1;border-radius:6px}
-.sbtn:hover:not(:disabled){background:#475569;color:#fff}
-.sbtn.save-btn{background:var(--ok);color:#fff;font-size:14px;padding:11px 12px}
-.sbtn.save-btn:hover:not(:disabled){background:#15803d}
-.sechdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.sechdr h3{font-size:14px;font-weight:600}
-hr{border:none;border-top:1px solid var(--bdr);margin:14px 0}
-.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;text-transform:uppercase}
-.bw{background:#fef3c7;color:#92400e}.bc{background:#fee2e2;color:#991b1b}
-.tw{border:1px solid var(--bdr);border-radius:6px;margin-bottom:10px}
-.th{display:flex;align-items:center;gap:8px;padding:9px 13px;cursor:pointer;background:#f8fafc;border-radius:6px;user-select:none}
-.th.open{border-radius:6px 6px 0 0;border-bottom:1px solid var(--bdr)}
-.th:hover{background:#f1f5f9}
-.tb{padding:13px;display:none}
-.tb.open{display:block}
-.ac{border:1px solid var(--bdr);border-radius:6px;padding:11px;margin-bottom:8px;background:#fafafa}
-.ah{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.atag{background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;font-family:monospace}
-.afields{display:grid;gap:8px}
-#toast{position:fixed;bottom:20px;right:20px;background:#1e293b;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
-#toast.show{opacity:1}
-#no-server{display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:16px}
+body { display: flex; height: 100vh; overflow: hidden; }
+
+/* ---- sidebar ---- */
+#sidebar { width: 244px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--border); }
+.side-brand { display: flex; align-items: center; gap: 10px; padding: 12px 16px; min-height: 56px; border-bottom: 1px solid var(--border); }
+#nav { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.nav-label { font-size: 12px; font-weight: 650; color: var(--text-3); padding: 12px 10px 4px; }
+.nb { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--text-2); font-size: 13.5px; font-weight: 550; cursor: pointer; text-align: left; }
+.nb:hover { background: var(--surface-2); color: var(--text); }
+.nb.on { background: var(--accent-weak); color: var(--accent); }
+.nb-label { flex: 1; }
+.nbg { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 99px; background: var(--surface-3); color: var(--text-3); font-size: 12px; font-weight: 650; }
+.nb.on .nbg { background: var(--accent); color: var(--accent-text); }
+#stools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 12px; border-top: 1px solid var(--border); }
+#stools .wide { grid-column: 1 / -1; }
+
+/* ---- main ---- */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+#topbar h2 { font-family: var(--font-display); font-size: 17px; font-weight: 650; }
+#dirty { display: none; }
+#content { flex: 1; overflow-y: auto; padding: 24px; }
+.content-inner { max-width: 1080px; margin: 0 auto; }
+.panel { display: none; }
+.panel.on { display: block; }
+
+/* ---- collapsible cards ---- */
+.card { margin-bottom: 16px; overflow: hidden; }
+.ch { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; user-select: none; }
+.ch:hover { background: var(--surface-2); }
+.ch.open { border-bottom: 1px solid var(--border); }
+.cv { display: inline-grid; place-items: center; color: var(--text-3); transition: transform .15s; }
+.ch:not(.open) .cv, .th:not(.open) .cv { transform: rotate(-90deg); }
+.ct { flex: 1; font-weight: 650; font-size: 14.5px; }
+.cb { display: none; padding: 16px; }
+.cb.open { display: block; }
+
+/* ---- forms ---- */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.full { grid-column: 1 / -1; }
+.fg { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+label { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+input[type=text], input[type=number], input[type=email], select, textarea {
+  width: 100%; min-height: 36px; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface); color: var(--text); font-size: 13.5px; transition: border-color .12s, box-shadow .12s;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus); }
+textarea { min-height: 76px; resize: vertical; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
+.crow { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.crow label { font-size: 13.5px; font-weight: 500; color: var(--text); cursor: pointer; }
+input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.sechdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.sechdr h3 { font-size: 14.5px; font-weight: 650; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+
+/* ---- button variants used by the generated forms ---- */
+.btn.pri, .btn.ok { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.btn.pri:hover:not(:disabled), .btn.ok:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.ghost { background: var(--surface); }
+.btn.dan { background: transparent; border-color: var(--border); color: var(--text-2); }
+.btn.dan:hover:not(:disabled) { background: var(--crit-bg); border-color: var(--crit-bd); color: var(--crit); }
+.btn.sm { min-height: 28px; padding: 0 10px; font-size: 12px; }
+
+/* ---- thresholds and actions ---- */
+.badge.bw { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-bd); }
+.badge.bc { color: var(--crit); background: var(--crit-bg); border-color: var(--crit-bd); }
+.tw { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.th { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px; background: var(--surface-2); cursor: pointer; user-select: none; }
+.th.open { border-bottom: 1px solid var(--border); }
+.tb { display: none; padding: 14px; }
+.tb.open { display: block; }
+.ac { margin-bottom: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.ah { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.ah select { flex: 1; }
+.atag { padding: 2px 8px; border-radius: 6px; background: var(--accent-weak); color: var(--accent); font-family: var(--mono); font-size: 12px; font-weight: 650; }
+.afields { display: grid; gap: 10px; }
+
+/* ---- messages ---- */
+#toast { position: fixed; right: 20px; bottom: 20px; z-index: 999; padding: 10px 16px; border-radius: 10px; background: var(--tooltip-bg); color: var(--tooltip-text); font-size: 13px; box-shadow: var(--shadow-lg); opacity: 0; transform: translateY(6px); transition: opacity .2s, transform .2s; pointer-events: none; }
+#toast.show { opacity: 1; transform: none; }
+#no-server { display: none; margin-bottom: 16px; padding: 12px 14px; border: 1px solid var(--warn-bd); border-radius: 10px; background: var(--warn-bg); color: var(--text); font-size: 13px; }
+#no-server code { font-weight: 600; }
+
+/* ---- small screens: the sidebar becomes a scrolling tab strip ---- */
+@media (max-width: 760px) {
+  body { flex-direction: column; height: auto; overflow: visible; }
+  #sidebar { width: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  #nav { flex-direction: row; overflow-x: auto; padding: 8px 12px; }
+  .nb { width: auto; white-space: nowrap; }
+  .nav-label, #stools { display: none; }
+  #main { overflow: visible; }
+  #content { overflow: visible; padding: 16px; }
+}
 </style>
 </head>
 <body>
 
-<div id="sidebar">
-  <div id="stitle">&#9881; Monitoring</div>
-  <nav id="nav">
-    <button class="nb on" onclick="showPanel('global',this)">Global Settings</button>
-    <button class="nb" onclick="showPanel('processes',this)">Processes <span class="nbg" id="bg-processes">1</span></button>
-    <button class="nb" onclick="showPanel('cpu',this)">CPU Performance</button>
-    <button class="nb" onclick="showPanel('memory',this)">Memory Performance</button>
-    <button class="nb" onclick="showPanel('disk',this)">Disk <span class="nbg" id="bg-disk">2</span></button>
-    <button class="nb" onclick="showPanel('network',this)">Network <span class="nbg" id="bg-network">2</span></button>
-    <button class="nb" onclick="showPanel('document',this)">Document <span class="nbg" id="bg-document">&#9679;</span></button>
+<aside id="sidebar">
+  <div class="side-brand">
+    <div class="brand-mark" aria-hidden="true"><svg class="icon icon-lg" aria-hidden="true"><use href="web/static/icons.svg#i-logo"/></svg></div>
+    <div><div class="brand-name">Settings Editor</div><div class="brand-sub">monitoring_settings.json</div></div>
+  </div>
+  <nav id="nav" aria-label="Sections">
+    <div class="nav-label">General</div>
+    <button class="nb on" onclick="showPanel('global',this)"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-sliders"/></svg><span class="nb-label">Global settings</span></button>
+    <div class="nav-label">Monitors</div>
+    <button class="nb" onclick="showPanel('processes',this)"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-process"/></svg><span class="nb-label">Processes</span><span class="nbg" id="bg-processes">1</span></button>
+    <button class="nb" onclick="showPanel('cpu',this)"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-cpu"/></svg><span class="nb-label">CPU</span></button>
+    <button class="nb" onclick="showPanel('memory',this)"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-memory"/></svg><span class="nb-label">Memory</span></button>
+    <button class="nb" onclick="showPanel('disk',this)"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-disk"/></svg><span class="nb-label">Disk</span><span class="nbg" id="bg-disk">2</span></button>
+    <button class="nb" onclick="showPanel('network',this)"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-network"/></svg><span class="nb-label">Network</span><span class="nbg" id="bg-network">2</span></button>
+    <button class="nb" onclick="showPanel('document',this)"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-document"/></svg><span class="nb-label">Document</span><span class="nbg" id="bg-document">&#9679;</span></button>
   </nav>
   <div id="stools">
-    <button id="btn-save" class="btn sbtn save-btn" onclick="saveSettings()">&#128190; Save Changes</button>
-    <button id="btn-reload" class="btn sbtn" onclick="reloadSettings()">&#8635; Reload from File</button>
-    <button class="btn sbtn" onclick="exportCopy()">&#10515; Export Copy</button>
-    <button class="btn sbtn" onclick="copyJSON()">&#128203; Copy JSON</button>
+    <button id="btn-save" class="btn btn-primary wide" onclick="saveSettings()"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-save"/></svg>Save changes</button>
+    <button id="btn-reload" class="btn btn-sm" onclick="reloadSettings()" title="Discard edits and read the file again"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-refresh"/></svg>Reload</button>
+    <button class="btn btn-sm" onclick="exportCopy()" title="Download a copy of the JSON"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-download"/></svg>Export</button>
+    <button class="btn btn-sm wide" onclick="copyJSON()"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-copy"/></svg>Copy JSON</button>
   </div>
-</div>
+</aside>
 
 <div id="main">
-  <div id="topbar">
+  <header id="topbar" class="app-header">
     <h2 id="ptitle">Global Settings</h2>
-    <span id="dirty">&#9679; Unsaved changes</span>
-    <button class="btn ok sm" onclick="saveSettings()" id="btn-save-top">&#128190; Save Changes</button>
-  </div>
-  <div id="content">
+    <div class="header-actions">
+      <span id="dirty" class="badge b-warn">Unsaved changes</span>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-monitor"/></svg></button>
+      <button class="btn btn-primary btn-sm" onclick="saveSettings()" id="btn-save-top"><svg class="icon " aria-hidden="true"><use href="web/static/icons.svg#i-save"/></svg>Save changes</button>
+    </div>
+  </header>
+  <div id="content"><div class="content-inner">
     <div id="no-server">
-      &#9888; Running without the local server — Save is disabled. Launch <code>start_editor.bat</code> to enable saving.
+      Opened without the local server, so <b>Save is disabled</b> and you are looking at the built-in defaults.
+      Run <code>start_editor.bat</code> to edit the real file.
     </div>
     <div id="panel-global" class="panel on"></div>
     <div id="panel-processes" class="panel"></div>
@@ -111,12 +150,14 @@ hr{border:none;border-top:1px solid var(--bdr);margin:14px 0}
     <div id="panel-disk" class="panel"></div>
     <div id="panel-network" class="panel"></div>
     <div id="panel-document" class="panel"></div>
-  </div>
+  </div></div>
 </div>
 
 <div id="toast"></div>
 
 <script>
+const SPRITE='web/static/icons.svg';
+function ico(n){ return `<svg class="icon" aria-hidden="true"><use href="${SPRITE}#i-${n}"/></svg>`; }
 // ─── Embedded defaults (used when no server is running) ───────────────────────
 const DEFAULT_DATA = {"_meta":{"version":"1.6.0","last_updated":"2026-11-13","description":"Default test environment: one or more monitors per category for things every Windows 10/11 PC has, plus demo toggles (Notepad, the settings editor, the budget CSV). See docs/test-environment.md.","update_notes":"Bump version and update last_updated whenever you change this file."},"global":{"check_interval_sec":6,"log_file":"logs\\monitor.log","log_max_size_mb":50,"email_recipient":"alerts@example.com","email_sender":"monitor@example.com","email_cooldown_min":60,"scripts_dir":"scripts"},"processes":[{"name":"explorer.exe","display_name":"Windows Explorer","required":true,"check_interval_sec":30,"actions":{"on_not_running":[{"type":"log_to_file","level":"warning","instructions":"Windows Explorer (the desktop shell) is not running.\n\n1. Press Ctrl+Shift+Esc to open Task Manager.\n2. File > Run new task > type explorer.exe > OK.\n3. If it keeps crashing, check Event Viewer > Windows Logs > Application."}]}},{"name":"dwm.exe","display_name":"Desktop Window Manager","required":true,"check_interval_sec":30,"actions":{"on_not_running":[{"type":"log_to_file","level":"warning","instructions":"The Desktop Window Manager (dwm.exe) draws every window on screen and normally restarts on its own within seconds.\n\n1. Wait a moment: Windows restarts it automatically.\n2. If the screen stays black or frozen, press Win+Ctrl+Shift+B to reset the graphics driver.\n3. If it keeps stopping, check Event Viewer > Windows Logs > Application for Desktop Window Manager errors."}]}},{"name":"notepad.exe","display_name":"Notepad (demo)","required":true,"check_interval_sec":30,"actions":{"on_not_running":[{"type":"log_to_file","level":"warning","instructions":"Demo process: Notepad is watched so you can see an alert and a recovery on demand.\n\n1. Open Notepad from the Start menu: the row turns green within 30 s.\n2. Close it: the row turns red, an alert is logged, and this runbook is shown.\n3. In a real setup, list the applications your machine must keep running here."}]}}],"performance":{"cpu":{"check_interval_sec":5,"thresholds":[{"level":"warning","percent":80,"sustain_sec":30,"description":"CPU above 80% sustained for 30s","actions":[{"type":"log_to_file","level":"warning","message_template":"[{timestamp}] WARNING CPU: {current_value}% sustained {sustain_sec}s (threshold: {percent}%)"}]},{"level":"critical","percent":95,"sustain_sec":60,"description":"CPU above 95% sustained for 60s","actions":[{"type":"log_to_file","level":"critical","message_template":"[{timestamp}] CRITICAL CPU: {current_value}% sustained {sustain_sec}s (threshold: {percent}%)"},{"type":"email_draft","to":"{global.email_recipient}","subject_template":"[CRITICAL] CPU Alert on {hostname} — {timestamp}","body_template":"Server: {hostname}\nTimestamp: {timestamp}\nMetric: CPU Usage\nCurrent Value: {current_value}%\nThreshold: {percent}%\nSustained for: {sustain_sec}s\n\nPlease investigate immediately."},{"type":"run_script","path":"{global.scripts_dir}\\actions\\on_cpu_critical.ps1","args":["--level","critical","--value","{current_value}"]}]}]},"memory":{"check_interval_sec":5,"thresholds":[{"level":"warning","percent":85,"sustain_sec":30,"description":"RAM above 85% sustained for 30s","actions":[{"type":"log_to_file","level":"warning","message_template":"[{timestamp}] WARNING MEM: {current_value}% sustained {sustain_sec}s (threshold: {percent}%)"}]},{"level":"critical","percent":95,"sustain_sec":30,"description":"RAM above 95% sustained for 30s","actions":[{"type":"log_to_file","level":"critical","message_template":"[{timestamp}] CRITICAL MEM: {current_value}% sustained {sustain_sec}s (threshold: {percent}%)"},{"type":"email_draft","to":"{global.email_recipient}","subject_template":"[CRITICAL] Memory Alert on {hostname} — {timestamp}","body_template":"Server: {hostname}\nTimestamp: {timestamp}\nMetric: Memory Usage\nCurrent Value: {current_value}%\nThreshold: {percent}%\nSustained for: {sustain_sec}s\n\nPlease investigate immediately."},{"type":"run_script","path":"{global.scripts_dir}\\actions\\on_memory_critical.ps1","args":["--level","critical","--value","{current_value}"]}]}]}},"disk":[{"drive":"C:\\","display_name":"System Drive (C:)","check_interval_sec":60,"thresholds":[{"level":"warning","percent_used":75,"description":"Disk C: at 75% capacity","actions":[{"type":"log_to_file","level":"warning","message_template":"[{timestamp}] WARNING DISK C: {current_value}% used, {free_gb} GB free (threshold: {percent_used}%)"}]},{"level":"critical","percent_used":90,"description":"Disk C: at 90% capacity","actions":[{"type":"log_to_file","level":"critical","message_template":"[{timestamp}] CRITICAL DISK C: {current_value}% used, {free_gb} GB free (threshold: {percent_used}%)"},{"type":"email_draft","to":"{global.email_recipient}","subject_template":"[CRITICAL] Disk Space Alert on {hostname} (C:) — {timestamp}","body_template":"Server: {hostname}\nTimestamp: {timestamp}\nDrive: C:\\\nUsed: {current_value}%\nFree Space: {free_gb} GB\nThreshold: {percent_used}%\n\nImmediate cleanup or expansion required."},{"type":"run_script","path":"{global.scripts_dir}\\actions\\on_disk_critical.ps1","args":["--drive","C:","--value","{current_value}"]}]}]}],"network":[{"name":"Internet (Cloudflare DNS)","host":"1.1.1.1","port":53,"protocol":"icmp","timeout_sec":5,"check_interval_sec":30,"thresholds":[{"level":"warning","latency_ms":150,"description":"Round-trip latency above 150 ms","actions":[{"type":"log_to_file","level":"warning","message_template":"[{timestamp}] WARNING NET: {host} latency {current_value}ms (threshold: {latency_ms}ms)"}]},{"level":"critical","condition":"unreachable","description":"No ping reply: the internet connection may be down","actions":[{"type":"log_to_file","level":"critical","message_template":"[{timestamp}] CRITICAL NET: {host} unreachable"},{"type":"email_draft","to":"{global.email_recipient}","subject_template":"[CRITICAL] Network Outage on {hostname} — {timestamp}","body_template":"Server: {hostname}\nTimestamp: {timestamp}\nTarget: {host}:{port}\nStatus: UNREACHABLE\n\nPossible internet outage or gateway failure. Please investigate immediately."},{"type":"run_script","path":"{global.scripts_dir}\\actions\\on_network_down.ps1","args":["--host","{host}"]}]}]},{"name":"Google DNS (TCP 53)","host":"8.8.8.8","port":53,"protocol":"tcp","timeout_sec":5,"check_interval_sec":60,"thresholds":[{"level":"warning","latency_ms":300,"description":"TCP connect slower than 300 ms","actions":[{"type":"log_to_file","level":"warning","message_template":"[{timestamp}] WARNING NET: {host}:{port} connect {current_value}ms (threshold: {latency_ms}ms)"}]},{"level":"critical","condition":"unreachable","description":"TCP port 53 not reachable (internet down, or DNS blocked by a firewall)","actions":[{"type":"log_to_file","level":"critical","message_template":"[{timestamp}] CRITICAL NET: {host}:{port} unreachable"}]}]},{"name":"Monitoring Console","host":"localhost","port":5758,"protocol":"tcp","timeout_sec":3,"check_interval_sec":15,"thresholds":[{"level":"critical","condition":"unreachable","description":"Monitoring console on port 5758 not responding","actions":[{"type":"log_to_file","level":"critical","message_template":"[{timestamp}] CRITICAL SVC: localhost:5758 unreachable"},{"type":"run_script","path":"{global.scripts_dir}\\actions\\on_service_down.ps1","args":["--port","5758"]}]}]},{"name":"Settings Editor (demo)","host":"localhost","port":5757,"protocol":"tcp","timeout_sec":3,"check_interval_sec":30,"thresholds":[{"level":"warning","condition":"unreachable","description":"Demo: the settings editor is closed. Open it with start_editor.bat (or the console's banner) and this turns green.","actions":[{"type":"log_to_file","level":"warning","message_template":"[{timestamp}] WARNING SVC: settings editor on localhost:5757 is not running (demo)"}]}]}],"document":{"display_name":"Groceries spend (monthly budget)","path":"sample_data\\monthly_budget_sample.csv","filter_column":"Category","filter_value":"Groceries","value_column":"Amount","target":400,"unit":"$","check_interval_sec":30,"thresholds":[{"level":"warning","condition":"above","percent_of_target":80,"description":"Groceries spend above 80% of the monthly budget","actions":[{"type":"log_to_file","level":"warning","message_template":"[{timestamp}] WARNING DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"}]},{"level":"critical","condition":"above","percent_of_target":100,"description":"Groceries budget used up","actions":[{"type":"log_to_file","level":"critical","message_template":"[{timestamp}] CRITICAL DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"},{"type":"popup","title":"Budget alert: {document}","message_template":"{document} is at {unit}{current_value}, {current_percent}% of the {unit}{target} budget."},{"type":"email_draft","to":"{global.email_recipient}","subject_template":"[CRITICAL] {document} over budget on {hostname} — {timestamp}","body_template":"Document: {document}\nTimestamp: {timestamp}\nCurrent total: {unit}{current_value}\nTarget: {unit}{target}\nUsed: {current_percent}%\nThreshold: {percent_of_target}%\n\nReview the spending in the source file."}]}]},"others":{"_comment":"Pending to define. Add new monitoring sections here following the same pattern: name, check_interval_sec, thresholds [ { level, condition/value, actions [] } ]","items":[]}};
 
@@ -128,7 +169,7 @@ const esc  = s => String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').rep
 const escT = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const clone = o => JSON.parse(JSON.stringify(o));
 
-function markDirty(){ document.getElementById('dirty').style.display='inline'; }
+function markDirty(){ document.getElementById('dirty').style.display='inline-flex'; }
 function clearDirty(){ document.getElementById('dirty').style.display='none'; }
 
 let toastTimer;
@@ -165,7 +206,32 @@ document.getElementById('content').addEventListener('change', e=>{
 function tog(hdr){
   hdr.classList.toggle('open');
   hdr.nextElementSibling.classList.toggle('open');
+  hdr.setAttribute('aria-expanded', hdr.classList.contains('open'));
 }
+
+// ─── Accessibility pass (runs after every render) ────────────────────────────
+// The forms are generated as <label>…</label><input> pairs; link each label to
+// its field, name the action-type pickers, and make the collapsible headers
+// focusable buttons that open with Enter or Space.
+let _fieldId=0;
+function a11yPass(){
+  document.querySelectorAll('#content .fg > label').forEach(l=>{
+    if(l.htmlFor) return;
+    const ctl=l.parentElement.querySelector('input,select,textarea');
+    if(!ctl) return;
+    if(!ctl.id) ctl.id='fld'+(++_fieldId);
+    l.htmlFor=ctl.id;
+  });
+  document.querySelectorAll('#content .ah select:not([aria-label])').forEach(s=>s.setAttribute('aria-label','Action type'));
+  document.querySelectorAll('#content .ch, #content .th').forEach(h=>{
+    if(!h.hasAttribute('tabindex')){ h.tabIndex=0; h.setAttribute('role','button'); }
+    h.setAttribute('aria-expanded', h.classList.contains('open'));
+  });
+}
+document.getElementById('content').addEventListener('keydown', e=>{
+  const h=e.target.closest('.ch,.th');
+  if(h && e.target===h && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); tog(h); }
+});
 
 // ─── Navigation ──────────────────────────────────────────────────────────────
 const TITLES={global:'Global Settings',processes:'Processes',cpu:'CPU Performance',memory:'Memory Performance',disk:'Disk Monitoring',network:'Network Monitoring',document:'Document Monitoring'};
@@ -183,6 +249,7 @@ function updateBadges(){
   document.getElementById('bg-network').textContent=S.network.length;
   const docEl=document.getElementById('bg-document');
   if(docEl) docEl.textContent=S.document?'1':'0';
+  a11yPass();
 }
 
 // ─── Action rendering ────────────────────────────────────────────────────────
@@ -227,7 +294,7 @@ function renderAction(a,arrPath,idx,sec){
       <select onchange="changeActType('${arrPath}',${idx},'${sec}',this.value)">
         ${types.map(t=>`<option value="${t}"${t===a.type?' selected':''}>${t}</option>`).join('')}
       </select>
-      <button class="btn dan sm" onclick="rmAction('${arrPath}',${idx},'${sec}')">&#10005; Remove</button>
+      <button class="btn dan sm" onclick="rmAction('${arrPath}',${idx},'${sec}')" title="Remove">${ico('trash')}Remove</button>
     </div>
     <div class="afields grid">${actionFields(a,ap,sec)}</div>
   </div>`;
@@ -314,16 +381,16 @@ function renderThreshold(t,arrPath,idx,sec,kind){
                `${t.level}${t.latency_ms!==undefined?' — '+t.latency_ms+'ms':' — unreachable'}`;
   return `<div class="tw">
     <div class="th" onclick="tog(this)">
-      <span class="cv">&#9660;</span>
+      <span class="cv">${ico('chevron')}</span>
       <span class="badge ${badgeCls}">${t.level}</span>
       <span style="font-size:13px;flex:1">${esc(label)}</span>
-      <button class="btn dan sm" onclick="event.stopPropagation();rmThresh('${arrPath}',${idx},'${sec}')">&#10005;</button>
+      <button class="btn dan sm" onclick="event.stopPropagation();rmThresh('${arrPath}',${idx},'${sec}')" title="Remove threshold" aria-label="Remove threshold">${ico('trash')}</button>
     </div>
     <div class="tb">
       <div class="grid">${thresholdMetricFields(t,tp,kind)}</div>
       <hr>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <strong style="font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em">Actions</strong>
+        <strong style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">Actions</strong>
         <button class="btn ghost sm" onclick="addAction('${tp}.actions','${sec}')">+ Add Action</button>
       </div>
       ${renderActions(t.actions,`${tp}.actions`,sec)}
@@ -359,7 +426,7 @@ function renderGlobal(){
   const g=S.global, m=S._meta;
   document.getElementById('panel-global').innerHTML=`
   <div class="card">
-    <div class="ch open" onclick="tog(this)"><span class="cv">&#9660;</span><span class="ct">Global Settings</span></div>
+    <div class="ch open" onclick="tog(this)"><span class="cv">${ico('chevron')}</span><span class="ct">Global Settings</span></div>
     <div class="cb open"><div class="grid">
       <div class="fg"><label>Default Check Interval (sec)</label><input type="number" value="${g.check_interval_sec}" data-p="global.check_interval_sec"></div>
       <div class="fg"><label>Log Max Size (MB)</label><input type="number" value="${g.log_max_size_mb}" data-p="global.log_max_size_mb"></div>
@@ -371,7 +438,7 @@ function renderGlobal(){
     </div></div>
   </div>
   <div class="card">
-    <div class="ch open" onclick="tog(this)"><span class="cv">&#9660;</span><span class="ct">Metadata</span></div>
+    <div class="ch open" onclick="tog(this)"><span class="cv">${ico('chevron')}</span><span class="ct">Metadata</span></div>
     <div class="cb open"><div class="grid">
       <div class="fg"><label>Version</label><input type="text" value="${esc(m.version)}" data-p="_meta.version"></div>
       <div class="fg"><label>Last Updated</label><input type="text" value="${esc(m.last_updated)}" data-p="_meta.last_updated"></div>
@@ -402,9 +469,9 @@ function renderProcesses(openSet){
   ${procs.map((p,i)=>`
   <div class="card">
     <div class="ch" onclick="tog(this)">
-      <span class="cv">&#9660;</span>
+      <span class="cv">${ico('chevron')}</span>
       <span class="ct">${esc(p.display_name||p.name||'New Process')}</span>
-      <button class="btn dan sm" onclick="event.stopPropagation();rmProcess(${i})">&#10005; Remove</button>
+      <button class="btn dan sm" onclick="event.stopPropagation();rmProcess(${i})" title="Remove">${ico('trash')}Remove</button>
     </div>
     <div class="cb">
       <div class="grid">
@@ -415,7 +482,7 @@ function renderProcesses(openSet){
       </div>
       <hr>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <strong style="font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em">Actions: On Not Running</strong>
+        <strong style="font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">Actions: On Not Running</strong>
         <button class="btn ghost sm" onclick="addAction('processes.${i}.actions.on_not_running','processes')">+ Add Action</button>
       </div>
       ${renderActions(p.actions.on_not_running,`processes.${i}.actions.on_not_running`,'processes')}
@@ -457,7 +524,7 @@ function renderPerf(metric){
   const label=metric==='cpu'?'CPU':'Memory';
   document.getElementById('panel-'+metric).innerHTML=`
   <div class="card">
-    <div class="ch open" onclick="tog(this)"><span class="cv">&#9660;</span><span class="ct">${label} — Check Settings</span></div>
+    <div class="ch open" onclick="tog(this)"><span class="cv">${ico('chevron')}</span><span class="ct">${label} — Check Settings</span></div>
     <div class="cb open"><div class="grid">
       <div class="fg"><label>Check Interval (sec)</label><input type="number" value="${cfg.check_interval_sec}" data-p="performance.${metric}.check_interval_sec"></div>
     </div></div>
@@ -478,9 +545,9 @@ function renderDisk(){
   ${S.disk.map((d,i)=>`
   <div class="card">
     <div class="ch open" onclick="tog(this)">
-      <span class="cv">&#9660;</span>
+      <span class="cv">${ico('chevron')}</span>
       <span class="ct">${esc(d.display_name||d.drive)}</span>
-      <button class="btn dan sm" onclick="event.stopPropagation();rmDisk(${i})">&#10005; Remove</button>
+      <button class="btn dan sm" onclick="event.stopPropagation();rmDisk(${i})" title="Remove">${ico('trash')}Remove</button>
     </div>
     <div class="cb open">
       <div class="grid">
@@ -514,9 +581,9 @@ function renderNetwork(){
   ${S.network.map((n,i)=>`
   <div class="card">
     <div class="ch open" onclick="tog(this)">
-      <span class="cv">&#9660;</span>
+      <span class="cv">${ico('chevron')}</span>
       <span class="ct">${esc(n.name||n.host)}</span>
-      <button class="btn dan sm" onclick="event.stopPropagation();rmNetwork(${i})">&#10005; Remove</button>
+      <button class="btn dan sm" onclick="event.stopPropagation();rmNetwork(${i})" title="Remove">${ico('trash')}Remove</button>
     </div>
     <div class="cb open">
       <div class="grid">
@@ -564,11 +631,11 @@ function renderDocument(){
   const isXlsx=/\.xls[xm]?$/i.test(doc.path||'');
   el.innerHTML=`
   <div class="card">
-    <div class="ch open" onclick="tog(this)"><span class="cv">&#9660;</span><span class="ct">${esc(doc.display_name||'Document')} — Settings</span></div>
+    <div class="ch open" onclick="tog(this)"><span class="cv">${ico('chevron')}</span><span class="ct">${esc(doc.display_name||'Document')} — Settings</span></div>
     <div class="cb open"><div class="grid">
       <div class="fg"><label>Display Name</label><input type="text" value="${esc(doc.display_name)}" data-p="document.display_name"></div>
       <div class="fg"><label>Check Interval (sec)</label><input type="number" value="${esc(doc.check_interval_sec)}" data-p="document.check_interval_sec"></div>
-      <div class="fg full"><label>File (.csv or .xlsx, relative to the project folder)</label><div style="display:flex;gap:6px;align-items:center"><input type="text" value="${esc(doc.path)}" data-p="document.path" style="flex:1" onchange="renderDocument()"><button onclick="openDocumentFile()" title="Open this file" style="white-space:nowrap;padding:4px 10px;cursor:pointer">&#128196; Open File</button></div></div>
+      <div class="fg full"><label>File (.csv or .xlsx, relative to the project folder)</label><div style="display:flex;gap:6px;align-items:center"><input type="text" value="${esc(doc.path)}" data-p="document.path" style="flex:1" onchange="renderDocument()"><button onclick="openDocumentFile()" title="Open this file" style="white-space:nowrap;padding:4px 10px;cursor:pointer">${ico('external')}Open file</button></div></div>
       ${isXlsx?`<div class="fg"><label>Sheet Name (Excel only)</label><input type="text" value="${esc(doc.sheet_name)}" data-p="document.sheet_name"></div>`:''}
       <div class="fg"><label>Filter Column</label><input type="text" value="${esc(doc.filter_column)}" data-p="document.filter_column"></div>
       <div class="fg"><label>Filter Value (rows where column =)</label><input type="text" value="${esc(doc.filter_value)}" data-p="document.filter_value"></div>
@@ -625,7 +692,7 @@ function setSaveBusy(busy){
   ['btn-save','btn-save-top'].forEach(id=>{
     const b=document.getElementById(id); if(!b) return;
     b.disabled=busy;
-    b.innerHTML=busy?'&#9203; Saving&hellip;':'&#128190; Save Changes';
+    b.innerHTML=busy?ico('refresh')+'Saving&hellip;':ico('save')+'Save changes';
   });
 }
 

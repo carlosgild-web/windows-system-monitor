@@ -69,7 +69,10 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
 - **Web UI**: the console page is `web/console.html` (plain HTML/JS, no build step); the editor is
   `monitoring_editor.html`. Both load `web/static/theme.css` (color tokens, light + dark), `theme.js` (theme switch)
   and `icons.svg` (sprite: `<svg class="icon"><use href="/static/icons.svg#i-name"/></svg>`) through a `/static/`
-  route that only serves whitelisted file types from inside `web/static/`. No CDNs: the app must work offline.
+  route that only serves whitelisted file types from inside `web/static/`. The editor links them relatively
+  (`web/static/...`) so it also works opened from disk; the servers accept both `/static/` and `/web/static/`.
+  No CDNs: the app must work offline. The editor's `a11yPass()` links generated labels to fields and makes
+  collapsible headers keyboard buttons; call it (via `updateBadges()`) after any new render function.
   Status colors (`--ok/--warn/--crit`) are for status only; controls stay neutral or use `--accent`.
 
 ## Configuration schema

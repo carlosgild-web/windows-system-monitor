@@ -87,6 +87,26 @@ class ServedOverHttpTests(unittest.TestCase):
         self.assertEqual((status, ctype), (200, "text/javascript; charset=utf-8"))
         self.assertEqual(self.get(port, "/static/%2e%2e/%2e%2e/server.py")[0], 404)
 
+    def test_editor_relative_links_resolve(self):
+        # monitoring_editor.html links web/static/... so it also works opened from disk
+        port = self.serve(server.Handler)
+        self.assertEqual(self.get(port, "/web/static/theme.css")[:2], (200, "text/css; charset=utf-8"))
+        self.assertEqual(self.get(port, "/web/static/../../server.py")[0], 404)
+        self.assertEqual(self.get(port, "/web/server.py")[0], 404)
+
+
+class EditorPageTests(unittest.TestCase):
+    def test_editor_uses_the_shared_theme_and_existing_icons(self):
+        import re
+        page = (ROOT / "monitoring_editor.html").read_text(encoding="utf-8")
+        for asset in ("web/static/theme.css", "web/static/theme.js", "web/static/favicon.svg"):
+            self.assertIn(asset, page)
+            self.assertTrue((ROOT / asset).is_file(), asset)
+        sprite = (ROOT / "web" / "static" / "icons.svg").read_text(encoding="utf-8")
+        defined = set(re.findall(r'<symbol id="i-([\w-]+)"', sprite))
+        used = set(re.findall(r"icons\.svg#i-([\w-]+)", page)) | set(re.findall(r"ico\('([\w-]+)'\)", page))
+        self.assertFalse(used - defined, f"icons used but not in the sprite: {sorted(used - defined)}")
+
 
 class IconSpriteTests(unittest.TestCase):
     def test_every_icon_the_console_uses_exists(self):

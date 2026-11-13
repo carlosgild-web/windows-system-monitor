@@ -15,6 +15,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   budget CSV. [docs/test-environment.md](docs/test-environment.md) shows how to trigger every alert.
 
 ### Fixed
+- Accessibility: every editor field is now linked to its label (196 of 199 were not), collapsible sections open
+  with Enter/Space, and console dialogs move focus inside on open and back on close.
 - A metric hovering around a threshold no longer opens a new email draft every time it dips and comes back. CPU,
   memory, disk and network alerts use hysteresis (optional `clear_margin` / `clear_sec` per threshold), and
   `email_draft` is limited to one per item and level per `global.email_cooldown_min` (default 60), saved in
@@ -26,6 +28,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   Pause/Resume controls (red is only used for critical status), and light and dark themes with a switch. Info
   tooltips also open on keyboard focus. The page moved out of the Python file into `web/console.html`; a shared
   theme, SVG icon set and favicon live in `web/static/`, served by both servers at `/static/`.
+- **Redesigned settings editor** on the same theme: light sidebar with icons and counts, light/dark switch, calmer
+  remove buttons (red only on hover), and a phone layout where the sidebar becomes a tab strip.
 - **Breaking:** the `ebook_sales` config section is replaced by `document` (the doctor warns if it is still
   present); see the upgrade note in `docs/configuration.md`. The doctor checks for Excel only when the document is
   a workbook.
