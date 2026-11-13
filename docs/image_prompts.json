@@ -1,0 +1,49 @@
+{
+  "_about": "Prompts for the project's images, made with Google Gemini (free app). One job per image; style lines are appended to every prompt. See docs/images.md.",
+  "style": "Flat vector-style illustration with subtle depth, calm and technical. Palette: deep blue #2f5bea and teal #12a4b8 with soft gradients, cool greys, and small accents of green #23a25a, amber #e48a0e and red #dc3a40 used only for status lights. Rounded geometric shapes, clean edges, soft shadows. Absolutely no text, letters, numbers, logos, brand marks or watermarks anywhere in the image.",
+  "spot_style": "Single centered object on a plain solid light grey background (#f0f2f5), generous empty margin around it, simple enough to read at 80 pixels.",
+  "jobs": [
+    {
+      "name": "app-icon",
+      "aspect": "1:1",
+      "spot": false,
+      "prompt": "An app icon for a Windows system-monitoring tool: a rounded square tile with a blue-to-teal diagonal gradient, and on it a bold, clean white heartbeat pulse line that rises into a small peak, with three tiny status dots (green, amber, red) along the bottom edge. Centered, symmetric, generous padding, works at small sizes. Square format."
+    },
+    {
+      "name": "guide",
+      "aspect": "23:10",
+      "spot": false,
+      "prompt": "A wide illustration explaining a monitoring system: in the middle a laptop whose screen shows simple dashboard cards with gauges and green, amber and red status dots; around it, connected to it by thin curved lines, five small floating rounded tiles each holding one simple icon: an application window, a processor chip, a hard drive, a globe, and a spreadsheet grid. Light, airy background with lots of space. Wide landscape format, about twice as wide as tall."
+    },
+    {
+      "name": "state-nodata",
+      "aspect": "1:1",
+      "spot": true,
+      "prompt": "A small spot illustration meaning 'waiting for data': an empty dashboard card drawn with a dotted outline and a gentle hourglass beside it. Square format."
+    },
+    {
+      "name": "state-paused",
+      "aspect": "1:1",
+      "spot": true,
+      "prompt": "A small spot illustration meaning 'monitoring paused': a round gauge dial with a large soft pause symbol (two rounded vertical bars) in front of it. Square format."
+    },
+    {
+      "name": "state-error",
+      "aspect": "1:1",
+      "spot": true,
+      "prompt": "A small spot illustration meaning 'the data could not be read': a paper document sheet with a folded corner and a small amber warning triangle containing a simple exclamation mark shape. Square format."
+    },
+    {
+      "name": "hero",
+      "aspect": "20:7",
+      "spot": false,
+      "prompt": "A wide banner illustration for a software project page: an isometric desktop computer and monitor on a desk, surrounded by floating translucent dashboard panels with line charts, ring gauges, a progress bar and green, amber and red status dots, connected by thin glowing lines. Calm, modern, lots of breathing room on both sides. Very wide landscape format, about three times as wide as tall."
+    },
+    {
+      "name": "social-preview",
+      "aspect": "2:1",
+      "spot": false,
+      "prompt": "A social-media preview card illustration for a Windows monitoring project: an isometric computer with floating dashboard panels (ring gauges, line chart, status dots in green, amber and red) on the right half, and a calm empty gradient area on the left half. Landscape format, exactly twice as wide as tall."
+    }
+  ]
+}
