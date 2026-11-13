@@ -94,8 +94,10 @@ start_editor.bat       :: settings editor at http://localhost:5757
 stop_monitoring.bat    :: stop everything
 ```
 
-To see an alert end to end, open and then close **Notepad**. The default config watches it. Within about 30 seconds the
-console shows it as *NOT RUNNING* with an alert count, and `logs/monitor.log` records the event and its recovery.
+The default config is a **test environment that works on any Windows PC**: Explorer and the Desktop Window Manager,
+CPU and RAM, the `C:` drive, two public DNS servers, and a made-up budget CSV, plus demo toggles. To see an alert end
+to end, open and then close **Notepad**: within about 30 seconds the console shows it as *NOT RUNNING* with an alert
+count, and `logs/monitor.log` records the event and its recovery. **[How to trigger every alert →](docs/test-environment.md)**
 
 ### What the doctor reports
 
