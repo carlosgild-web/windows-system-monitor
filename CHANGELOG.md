@@ -27,6 +27,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   `logs/alert_state.json` so it survives restarts.
 
 ### Changed
+- The console and the settings editor also run off Windows (the Docker demo): the console becomes read-only (no
+  live `tasklist` check, no pause/resume, no launching the editor), `/api/open-file` explains instead of failing,
+  and `BIND_HOST`, `NO_BROWSER`, `DEMO_MODE` and `EDITOR_HOST` environment variables control the container setup.
+  On Windows nothing changes: both servers still bind to localhost.
 - **Redesigned web console.** An overview row (critical / warning / healthy / monitors live), cards that flow into
   as many columns as fit (one column on phones), meters with threshold ticks, one status badge per row, neutral
   Pause/Resume controls (red is only used for critical status), and light and dark themes with a switch. Info

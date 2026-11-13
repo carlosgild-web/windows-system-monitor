@@ -523,13 +523,25 @@ function render(d){
   document.getElementById('pdot').className='live-dot'+(liveCount?' on':'');
   document.getElementById('sum-live').textContent=`${liveCount}/${Object.keys(monIds).length}`;
 
+  // Off Windows (the Docker demo) the console is read-only: no pause/resume, simulated data.
+  const caps=d.capabilities||{control:true, open_editor:true};
+  if(d.demo_mode && !document.body.classList.contains('demo-mode')){
+    document.body.classList.add('demo-mode');
+    document.querySelector('.guide-text').textContent='This is a live demo of a Windows monitoring toolkit, running in Docker '+
+      'with simulated data: the real monitors need Windows. The console and the settings editor are the real ones.';
+  }
+  document.getElementById('btn-open-editor').hidden=!caps.open_editor;
+
   // card header: pause / resume
   Object.keys(monIds).forEach(key=>{
     const active=!!mons[key];
     const card=document.getElementById('card-'+key), ctrl=document.getElementById('ctrl-'+key);
     if(!card||!ctrl) return;
     card.classList.toggle('paused', !active);
-    if(active){
+    if(!caps.control){
+      ctrl.innerHTML=active?`<span class="badge b-info b-plain" title="Monitors can only be paused on Windows">${d.demo_mode?'Simulated':'Read-only'}</span>`
+        :'<span class="badge b-unk b-plain">No data</span>';
+    } else if(active){
       ctrl.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="ctrlMonitor('stop','${key}')" title="Stop this monitor's background script">${ico('pause')}Pause</button>`;
     } else {
       ctrl.innerHTML=`<span class="badge b-unk b-plain">Paused</span><button class="btn btn-primary btn-sm" onclick="ctrlMonitor('start','${key}')">${ico('play')}Resume</button>`;

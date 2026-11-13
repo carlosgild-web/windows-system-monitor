@@ -15,6 +15,7 @@ in the browser could rewrite the settings -- including the run_script actions
 """
 import json
 import os
+import sys
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -25,6 +26,9 @@ JSON_FILE = BASE / "monitoring_settings.json"
 HTML_FILE = BASE / "monitoring_editor.html"
 STATIC_DIR = BASE / "web" / "static"   # theme, icons, images (shared with the console)
 PORT = 5757
+# localhost by default. The demo container sets BIND_HOST=0.0.0.0 and publishes the port
+# on 127.0.0.1 only, so the Host/Origin checks below still see localhost:5757.
+BIND_HOST = os.environ.get("BIND_HOST", "localhost")
 MAX_BODY_BYTES = 2 * 1024 * 1024
 OPENABLE_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv"}
 
@@ -149,6 +153,9 @@ class Handler(BaseHTTPRequestHandler):
                                  "error": "Only spreadsheet files inside the project folder can be opened"})
             elif not target.exists():
                 self._json(404, {"ok": False, "error": f"File not found: {rel}"})
+            elif not hasattr(os, "startfile"):
+                self._json(501, {"ok": False,
+                                 "error": "Opening files needs Windows (not available in the demo container)"})
             else:
                 os.startfile(str(target))  # Windows only
                 self._json(200, {"ok": True})
@@ -181,13 +188,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    import sys
     url = f"http://localhost:{PORT}"
     print(f"\n  Monitoring Settings Editor")
     print(f"  Open: {url}")
     print("  Stop: Ctrl+C\n")
     # --no-browser: started by the console's "Open Monitoring settings" button,
     # which opens the page itself.
-    if "--no-browser" not in sys.argv[1:]:
+    if "--no-browser" not in sys.argv[1:] and not os.environ.get("NO_BROWSER"):
         webbrowser.open(url)
-    HTTPServer(("localhost", PORT), Handler).serve_forever()
+    HTTPServer((BIND_HOST, PORT), Handler).serve_forever()

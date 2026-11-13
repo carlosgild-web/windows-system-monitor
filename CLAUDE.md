@@ -66,6 +66,10 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
 - **Web servers** (stdlib only) bind to localhost and reject any POST whose `Host`/`Origin` is not their own page
   (CSRF / DNS-rebinding protection). They read the request body before replying, because an early reply with
   unread data resets the connection on Windows. Keep both properties when adding endpoints.
+- **Off Windows** (`os.name != "nt"`, the Docker demo) the console is read-only: no `tasklist`, no start/stop, no
+  spawning the editor; `/api/status` reports `capabilities` and `demo_mode`. Environment: `BIND_HOST` (default
+  `localhost`), `NO_BROWSER`, `DEMO_MODE`, `EDITOR_HOST` (where the console probes the editor). Never bind to
+  anything but localhost on Windows.
 - **`POST /api/open-editor`** (console): starts `server.py --no-browser` hidden with its full path (that's how
   `stop_monitoring.ps1` finds it) unless port 5757 already answers, waits for it, and returns its URL.
 - **Web UI**: the console page is `web/console.html` (plain HTML/JS, no build step); the editor is
