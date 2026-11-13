@@ -9,10 +9,32 @@ BeforeDiscovery {
         ForEach-Object { @{ Name = $_; Path = Join-Path $root "scripts\$_" } }
 }
 
-Describe 'Monitor <Name> action dispatch' -ForEach $monitors {
-    It 'handles every action type the config schema allows' {
+Describe 'Monitor <Name> actions' -ForEach $monitors {
+    BeforeAll {
         $t = $null; $e = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$t, [ref]$e)
+    }
+
+    It 'dot-sources the shared action library and calls it' {
+        $text = Get-Content $Path -Raw
+        $text | Should -Match ([regex]::Escape("'lib\MonitorActions.ps1'"))
+        $text | Should -Match 'Invoke-MonitorActions\s+-Actions'
+    }
+
+    It 'does not define its own copy of the action functions' {
+        $own = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) |
+            Where-Object { $_.Name -match '^(Expand-Template|Invoke-\w*Action|Invoke-Actions)$' } |
+            ForEach-Object { $_.Name })
+        $own | Should -BeNullOrEmpty -Because 'action code lives once, in scripts\lib\MonitorActions.ps1'
+    }
+}
+
+Describe 'Shared action library' {
+    It 'handles every action type the config schema allows' {
+        $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+        $t = $null; $e = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $root 'scripts\lib\MonitorActions.ps1'), [ref]$t, [ref]$e)
         $switch = $ast.FindAll({
             param($n)
             $n -is [System.Management.Automation.Language.SwitchStatementAst] -and

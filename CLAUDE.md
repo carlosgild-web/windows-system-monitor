@@ -51,6 +51,9 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
 - **`scripts/lib/MonitorCommon.ps1`** (dot-sourced by every monitor): `Get-MonitorSettings` (UTF-8 load + resolves
   relative `global.log_file` / `global.scripts_dir` against the project root), `Resolve-ProjectPath`,
   `Show-MonitorPopup`.
+- **`scripts/lib/MonitorActions.ps1`** (dot-sourced by every threshold monitor after `MonitorCommon.ps1`): the four
+  action types, once. `Invoke-MonitorActions -Actions -Vars -GlobalCfg [-SuppressSpam]`, `Expand-Template`,
+  `Write-MonitorLog` (rotating log writer). Never copy action code into a monitor; a test enforces this.
 - **`scripts/lib/Doctor.psm1`**: all health checks (`Test-DoctorEnvironment/Config/Paths/Runtime`, `Invoke-Doctor`).
   Used by `doctor.ps1`, the launcher preflight, and the Pester tests.
 - **`scripts/lib/Read-XlsxTotal.ps1`**: the ebook monitor runs this as a short-lived child process for every
@@ -77,8 +80,8 @@ doctor afterwards. Full reference: `docs/configuration.md`.
 
 ### Adding a new monitor type
 
-1. Create `scripts/monitor_<type>.ps1`, mirroring an existing monitor (dot-source `lib\MonitorCommon.ps1`, handle all
-   four action types, write a state file).
+1. Create `scripts/monitor_<type>.ps1`, mirroring an existing monitor (dot-source `lib\MonitorCommon.ps1` and
+   `lib\MonitorActions.ps1`, fire actions with `Invoke-MonitorActions`, write a state file).
 2. Add it to `$MONITORS` in `scripts/start_monitoring.ps1` and `$MONITOR_SCRIPTS` in `scripts/stop_monitoring.ps1`.
 3. Add its config section and bump `_meta.version`.
 4. Add it to `$MonitorDefs` and its schema rules to `Test-DoctorConfig` in `scripts/lib/Doctor.psm1`.

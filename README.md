@@ -196,7 +196,7 @@ Invoke-Pester tests/powershell                      # requires Pester 5.5+
 │   ├── doctor.ps1
 │   ├── run_hidden.vbs            # windowless launch (see design notes)
 │   ├── actions/                  # sample run_script remediation handlers
-│   └── lib/                      # MonitorCommon.ps1, ActionHandler.ps1, Doctor.psm1
+│   └── lib/                      # MonitorCommon.ps1, MonitorActions.ps1, ActionHandler.ps1, Doctor.psm1
 ├── sample_data/                  # made-up spreadsheet for the ebook monitor
 ├── tests/                        # Pester + Python unittest suites
 └── docs/                         # configuration reference, design decisions, screenshots
