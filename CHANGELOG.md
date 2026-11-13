@@ -10,6 +10,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A generic **document monitor** replaces Ebook Sales: it sums a filtered column of a `.csv` (no Excel needed) or
   `.xlsx` file and alerts when the total goes `above` or `below` a percent of a target, with the same actions,
   hysteresis and email cooldown as the other monitors. The default watches a made-up monthly budget CSV.
+- A **default test environment** that works on any Windows 10/11 PC: Explorer, the Desktop Window Manager and
+  Notepad (demo), CPU/RAM, `C:`, Cloudflare and Google DNS, the console and the settings editor (demo), and the
+  budget CSV. [docs/test-environment.md](docs/test-environment.md) shows how to trigger every alert.
 
 ### Fixed
 - A metric hovering around a threshold no longer opens a new email draft every time it dips and comes back. CPU,

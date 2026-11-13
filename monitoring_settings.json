@@ -2,7 +2,7 @@
   "_meta": {
     "version": "1.6.0",
     "last_updated": "2026-11-13",
-    "description": "Monitoring configuration: defines what to watch, thresholds, and automated actions.",
+    "description": "Default test environment: one or more monitors per category for things every Windows 10/11 PC has, plus demo toggles (Notepad, the settings editor, the budget CSV). See docs/test-environment.md.",
     "update_notes": "Bump version and update last_updated whenever you change this file."
   },
   "global": {
@@ -31,8 +31,8 @@
       }
     },
     {
-      "name": "notepad.exe",
-      "display_name": "Notepad",
+      "name": "dwm.exe",
+      "display_name": "Desktop Window Manager",
       "required": true,
       "check_interval_sec": 30,
       "actions": {
@@ -40,7 +40,22 @@
           {
             "type": "log_to_file",
             "level": "warning",
-            "instructions": "Notepad is not running (demo process: open and close it to see the alert and recovery).\n\nRunbook:\n1. Start Notepad from the Start menu.\n2. If it fails to start, check Event Viewer > Windows Logs > Application.\n3. Escalate to the on-call engineer if the issue persists."
+            "instructions": "The Desktop Window Manager (dwm.exe) draws every window on screen and normally restarts on its own within seconds.\n\n1. Wait a moment: Windows restarts it automatically.\n2. If the screen stays black or frozen, press Win+Ctrl+Shift+B to reset the graphics driver.\n3. If it keeps stopping, check Event Viewer > Windows Logs > Application for Desktop Window Manager errors."
+          }
+        ]
+      }
+    },
+    {
+      "name": "notepad.exe",
+      "display_name": "Notepad (demo)",
+      "required": true,
+      "check_interval_sec": 30,
+      "actions": {
+        "on_not_running": [
+          {
+            "type": "log_to_file",
+            "level": "warning",
+            "instructions": "Demo process: Notepad is watched so you can see an alert and a recovery on demand.\n\n1. Open Notepad from the Start menu: the row turns green within 30 s.\n2. Close it: the row turns red, an alert is logged, and this runbook is shown.\n3. In a real setup, list the applications your machine must keep running here."
           }
         ]
       }
@@ -193,8 +208,8 @@
   ],
   "network": [
     {
-      "name": "Internet Gateway",
-      "host": "8.8.8.8",
+      "name": "Internet (Cloudflare DNS)",
+      "host": "1.1.1.1",
       "port": 53,
       "protocol": "icmp",
       "timeout_sec": 5,
@@ -215,7 +230,7 @@
         {
           "level": "critical",
           "condition": "unreachable",
-          "description": "Host is unreachable / no response",
+          "description": "No ping reply: the internet connection may be down",
           "actions": [
             {
               "type": "log_to_file",
@@ -235,6 +250,40 @@
                 "--host",
                 "{host}"
               ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Google DNS (TCP 53)",
+      "host": "8.8.8.8",
+      "port": 53,
+      "protocol": "tcp",
+      "timeout_sec": 5,
+      "check_interval_sec": 60,
+      "thresholds": [
+        {
+          "level": "warning",
+          "latency_ms": 300,
+          "description": "TCP connect slower than 300 ms",
+          "actions": [
+            {
+              "type": "log_to_file",
+              "level": "warning",
+              "message_template": "[{timestamp}] WARNING NET: {host}:{port} connect {current_value}ms (threshold: {latency_ms}ms)"
+            }
+          ]
+        },
+        {
+          "level": "critical",
+          "condition": "unreachable",
+          "description": "TCP port 53 not reachable (internet down, or DNS blocked by a firewall)",
+          "actions": [
+            {
+              "type": "log_to_file",
+              "level": "critical",
+              "message_template": "[{timestamp}] CRITICAL NET: {host}:{port} unreachable"
             }
           ]
         }
@@ -265,6 +314,28 @@
                 "--port",
                 "5758"
               ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings Editor (demo)",
+      "host": "localhost",
+      "port": 5757,
+      "protocol": "tcp",
+      "timeout_sec": 3,
+      "check_interval_sec": 30,
+      "thresholds": [
+        {
+          "level": "warning",
+          "condition": "unreachable",
+          "description": "Demo: the settings editor is closed. Open it with start_editor.bat (or the console's banner) and this turns green.",
+          "actions": [
+            {
+              "type": "log_to_file",
+              "level": "warning",
+              "message_template": "[{timestamp}] WARNING SVC: settings editor on localhost:5757 is not running (demo)"
             }
           ]
         }
