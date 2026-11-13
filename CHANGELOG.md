@@ -4,9 +4,12 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions match
 `_meta.version` in `monitoring_settings.json`.
 
-## [Unreleased]
-
-### Added
+## [Unreleased]
+
+### Added
+- **Illustrations made with Google Gemini**: an app icon, a picture for the "How this demo works" panel, empty /
+  paused / error state art in the console, and the README hero and social preview. Every slot has a fallback, so the
+  app works without them; `docs/images.md` and `tools/prepare_images.py` show how to make them again.
 - A **Docker demo**: `docker compose up --build` runs the real console and settings editor on any OS, fed by
   `docker/simulator.py` (simulated CPU, memory, disk and public hosts; the budget CSV and localhost checks are real).
   Non-root, standard library only, published on 127.0.0.1. A CI job builds it and runs `docker/smoke_test.py`.

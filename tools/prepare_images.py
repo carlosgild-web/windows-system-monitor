@@ -46,6 +46,16 @@ def find_raw(name):
     return None
 
 
+# Spot illustrations are drawn with wide margins; keep the central part so they read at 64 px.
+ZOOM = {"state-nodata": 0.74, "state-paused": 0.74, "state-error": 0.74}
+
+
+def zoom(img, factor):
+    w, h = round(img.width * factor), round(img.height * factor)
+    left, top = (img.width - w) // 2, (img.height - h) // 2
+    return img.crop((left, top, left + w, top + h))
+
+
 def cover(img, w, h):
     """Center-crop to w:h, then resize to exactly w x h."""
     from PIL import Image
@@ -74,6 +84,8 @@ def prepare(only):
             continue
         with Image.open(raw) as img:
             img = img.convert("RGB")
+            if name in ZOOM:
+                img = zoom(img, ZOOM[name])
             for out, w, h in OUTPUTS[name]:
                 out.parent.mkdir(parents=True, exist_ok=True)
                 res = cover(img, w, h)
