@@ -1,0 +1,200 @@
+/* Windows System Monitor: shared theme for the console (:5758) and the settings editor (:5757).
+   Served from /static/theme.css by both servers. No external fonts or CDNs: the app runs offline.
+
+   Color rule: status colors (ok / warn / crit) are only for status. Controls are neutral or accent. */
+
+/* ---- Tokens: light (default) ------------------------------------------------------------ */
+:root {
+  color-scheme: light;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --surface-3: #e7eaef;
+  --border: #e1e5eb;
+  --border-strong: #cbd2dc;
+  --text: #151a24;
+  --text-2: #475165;
+  --text-3: #636d7f;
+  --accent: #2f5bea;
+  --accent-hover: #2349c7;
+  --accent-text: #ffffff;
+  --accent-weak: #e9eefd;
+
+  --ok: #13703c;      --ok-bg: #e6f5ec;   --ok-bd: #b3dfc4;   --ok-fill: #23a25a;
+  --warn: #965000;    --warn-bg: #fff2df; --warn-bd: #f2cb92; --warn-fill: #e48a0e;
+  --crit: #b8232a;    --crit-bg: #fdebeb; --crit-bd: #f3b6b9; --crit-fill: #dc3a40;
+  --unk: #5b6474;     --unk-bg: #eef0f3;  --unk-bd: #d5dae1;  --unk-fill: #9aa3b2;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .05);
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 2px 6px rgba(16, 24, 40, .06);
+  --shadow-lg: 0 12px 32px rgba(16, 24, 40, .18);
+  --focus: 0 0 0 3px rgba(47, 91, 234, .35);
+  --scrim: rgba(15, 20, 30, .45);
+  --tooltip-bg: #1b2230;
+  --tooltip-text: #e8ebf1;
+  --tooltip-muted: #a3acbb;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* ---- Tokens: dark ------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0d1016;
+    --surface: #151a22;
+    --surface-2: #1b212b;
+    --surface-3: #232a36;
+    --border: #262e3a;
+    --border-strong: #364051;
+    --text: #e7eaf0;
+    --text-2: #b4bccb;
+    --text-3: #8d97a8;
+    --accent: #6f8eff;
+    --accent-hover: #8aa3ff;
+    --accent-text: #0d1016;
+    --accent-weak: #1d2747;
+    --ok: #57cf8d;   --ok-bg: #11281c;   --ok-bd: #1d4a31;   --ok-fill: #3db872;
+    --warn: #f3ac4e; --warn-bg: #2c2011; --warn-bd: #58401a; --warn-fill: #e8951e;
+    --crit: #ff7b7f; --crit-bg: #331619; --crit-bd: #5c262b; --crit-fill: #f0545a;
+    --unk: #a3acbb;  --unk-bg: #1e242e;  --unk-bd: #343c4a;  --unk-fill: #6b7486;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 8px rgba(0, 0, 0, .25);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, .55);
+    --focus: 0 0 0 3px rgba(111, 142, 255, .45);
+    --scrim: rgba(0, 0, 0, .6);
+    --tooltip-bg: #232a36;
+    --tooltip-text: #e7eaf0;
+    --tooltip-muted: #9aa4b5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1016;
+  --surface: #151a22;
+  --surface-2: #1b212b;
+  --surface-3: #232a36;
+  --border: #262e3a;
+  --border-strong: #364051;
+  --text: #e7eaf0;
+  --text-2: #b4bccb;
+  --text-3: #8d97a8;
+  --accent: #6f8eff;
+  --accent-hover: #8aa3ff;
+  --accent-text: #0d1016;
+  --accent-weak: #1d2747;
+  --ok: #57cf8d;   --ok-bg: #11281c;   --ok-bd: #1d4a31;   --ok-fill: #3db872;
+  --warn: #f3ac4e; --warn-bg: #2c2011; --warn-bd: #58401a; --warn-fill: #e8951e;
+  --crit: #ff7b7f; --crit-bg: #331619; --crit-bd: #5c262b; --crit-fill: #f0545a;
+  --unk: #a3acbb;  --unk-bg: #1e242e;  --unk-bd: #343c4a;  --unk-fill: #6b7486;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 8px rgba(0, 0, 0, .25);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, .55);
+  --focus: 0 0 0 3px rgba(111, 142, 255, .45);
+  --scrim: rgba(0, 0, 0, .6);
+  --tooltip-bg: #232a36;
+  --tooltip-text: #e7eaf0;
+  --tooltip-muted: #9aa4b5;
+}
+
+/* ---- Base --------------------------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+code, kbd, .mono { font-family: var(--mono); font-size: .92em; }
+a { color: var(--accent); }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-3); }
+:focus-visible { outline: none; box-shadow: var(--focus); border-radius: var(--radius-xs); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---- Icons (inline SVG sprite: /static/icons.svg#i-<name>) -------------------------------- */
+.icon {
+  width: 16px; height: 16px; flex-shrink: 0;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  vertical-align: -3px;
+}
+.icon-lg { width: 20px; height: 20px; }
+.icon-xl { width: 28px; height: 28px; }
+
+/* ---- Buttons ------------------------------------------------------------------------------ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 32px; padding: 0 12px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text);
+  font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.btn:hover { background: var(--surface-2); }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+.btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+.btn-danger-subtle { background: transparent; border-color: var(--border); color: var(--text-2); }
+.btn-danger-subtle:hover { background: var(--crit-bg); border-color: var(--crit-bd); color: var(--crit); }
+.btn-sm { min-height: 28px; padding: 0 10px; font-size: 12px; }
+.btn-icon { width: 32px; padding: 0; }
+.btn-icon.btn-sm { width: 28px; }
+
+/* ---- Badges ------------------------------------------------------------------------------- */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 9px; border-radius: 999px; border: 1px solid;
+  font-size: 12px; font-weight: 650; letter-spacing: .01em; white-space: nowrap;
+}
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge.b-plain::before { display: none; }
+.b-ok   { color: var(--ok);   background: var(--ok-bg);   border-color: var(--ok-bd); }
+.b-warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-bd); }
+.b-crit { color: var(--crit); background: var(--crit-bg); border-color: var(--crit-bd); }
+.b-unk  { color: var(--unk);  background: var(--unk-bg);  border-color: var(--unk-bd); }
+.b-info { color: var(--accent); background: var(--accent-weak); border-color: transparent; }
+
+/* ---- App header (shared by both pages) ---------------------------------------------------- */
+.app-header {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  min-height: 56px; padding: 8px 20px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-mark {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px;
+  background: linear-gradient(140deg, var(--accent), #12a4b8); color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.brand-mark img { width: 32px; height: 32px; border-radius: 9px; display: block; }
+.brand-name { font-family: var(--font-display); font-size: 16px; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
+.brand-sub { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.header-actions { display: flex; align-items: center; gap: 6px; }
+
+/* ---- Cards -------------------------------------------------------------------------------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- Scrollbars --------------------------------------------------------------------------- */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

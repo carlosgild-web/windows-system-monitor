@@ -186,7 +186,10 @@ Invoke-Pester tests/powershell                      # requires Pester 5.5+
 ├── server.py                     # settings editor backend (stdlib HTTP server, :5757)
 ├── monitoring_editor.html        # settings editor UI
 ├── MonitoringConsole/
-│   └── monitoring_console.py     # live dashboard (stdlib HTTP server, :5758)
+│   └── monitoring_console.py     # live dashboard backend (stdlib HTTP server, :5758)
+├── web/
+│   ├── console.html              # live dashboard page
+│   └── static/                   # shared theme (light/dark), SVG icons, served at /static/ by both servers
 ├── scripts/
 │   ├── process_monitor.ps1       # one script per monitor
 │   ├── performance_monitor.ps1

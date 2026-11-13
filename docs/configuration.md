@@ -261,5 +261,6 @@ Every file has an `updated` timestamp. The console and the doctor treat a monito
 2. Add it to `$MONITORS` in `scripts/start_monitoring.ps1` and to `$MONITOR_SCRIPTS` in `scripts/stop_monitoring.ps1`.
 3. Add its section to `monitoring_settings.json` and bump `_meta.version`.
 4. Add its state file to `$MonitorDefs` and its schema rules to `Test-DoctorConfig` in `scripts/lib/Doctor.psm1`.
-5. Add a render block in `MonitoringConsole/monitoring_console.py`, and a panel in `monitoring_editor.html`.
+5. Add a card and a render block in `web/console.html` (and its key in `MONITOR_SCRIPTS` in
+   `MonitoringConsole/monitoring_console.py`), and a panel in `monitoring_editor.html`.
 6. Add Pester cases. The script-quality tests pick up the new file automatically.
