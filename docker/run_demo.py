@@ -13,10 +13,11 @@ import time
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
+# Servers first, so the simulator's first network check already finds them listening.
 CHILDREN = [
-    ("simulator", [sys.executable, str(BASE / "docker" / "simulator.py")]),
     ("editor", [sys.executable, str(BASE / "server.py"), "--no-browser"]),
     ("console", [sys.executable, str(BASE / "MonitoringConsole" / "monitoring_console.py")]),
+    ("simulator", [sys.executable, str(BASE / "docker" / "simulator.py")]),
 ]
 
 

@@ -27,7 +27,8 @@ def wait_for_status(timeout=60):
         try:
             status = json.loads(get(CONSOLE + "/api/status")[2])
             last = status
-            if all(status["engine"]["monitors"].values()) and status.get("document"):
+            editor_up = any(h.get("port") == 5757 and h.get("reachable") for h in status.get("network", []))
+            if all(status["engine"]["monitors"].values()) and status.get("document") and editor_up:
                 return status
         except Exception as exc:          # not up yet
             last = exc
