@@ -237,6 +237,21 @@ function applyFold(){
     h.nextElementSibling.classList.toggle('open', FOLD[k]);
   });
 }
+// Collapse every monitor card (a list item such as "network.1") and every threshold in a
+// panel. Single settings cards (Global, Metadata, CPU/Memory check settings) are left alone.
+function collapsePanel(id){
+  const panel=document.getElementById('panel-'+id);
+  if(!panel) return;
+  panel.querySelectorAll('.ch, .th').forEach(h=>{
+    const k=foldKey(h);
+    if(!k||(h.classList.contains('ch')&&!/\.\d+$/.test(k))) return;
+    FOLD[k]=false;
+    h.classList.remove('open'); h.nextElementSibling.classList.remove('open');
+    h.setAttribute('aria-expanded','false');
+  });
+}
+// A monitor the user just added starts open, so its fields can be filled in.
+function foldOpenNew(listPath, i){ FOLD[listPath+'.'+i]=true; }
 // When an item is removed from (or inserted into) a list, the items after it change
 // index: move their remembered state with them, and forget the removed one.
 function foldShift(listPath, fromIdx, delta){
@@ -283,6 +298,9 @@ document.getElementById('content').addEventListener('keydown', e=>{
 // ─── Navigation ──────────────────────────────────────────────────────────────
 const TITLES={global:'Global Settings',processes:'Processes',cpu:'CPU Performance',memory:'Memory Performance',disk:'Disk Monitoring',network:'Network Monitoring',document:'Document Monitoring'};
 function showPanel(id,btn){
+  // Entering a section shows its monitors collapsed; the user unfolds the one to edit.
+  const prev=document.querySelector('.panel.on');
+  if(!prev||prev.id!=='panel-'+id) collapsePanel(id);
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
   document.getElementById('panel-'+id).classList.add('on');
@@ -556,6 +574,7 @@ function addProcess(){
   prevOpen.forEach(i=>newOpen.add(i+1));
   S.processes.unshift({name:'',display_name:'New Process',required:false,check_interval_sec:30,actions:{on_not_running:[]}});
   foldShift('processes', 0, +1);
+  foldOpenNew('processes', 0);
   renderProcesses(newOpen); markDirty();
 }
 function rmProcess(i){
@@ -594,12 +613,12 @@ function renderDisk(){
   </div>
   ${S.disk.map((d,i)=>`
   <div class="card">
-    <div class="ch open" onclick="tog(this)">
+    <div class="ch" onclick="tog(this)">
       <span class="cv">${ico('chevron')}</span>
       <span class="ct">${esc(d.display_name||d.drive)}</span>
       <button class="btn dan sm" onclick="event.stopPropagation();rmDisk(${i})" title="Remove">${ico('trash')}Remove</button>
     </div>
-    <div class="cb open">
+    <div class="cb">
       <div class="grid">
         <div class="fg"><label>Drive Path</label><input type="text" value="${esc(d.drive)}" data-p="disk.${i}.drive"></div>
         <div class="fg"><label>Display Name</label><input type="text" value="${esc(d.display_name)}" data-p="disk.${i}.display_name"></div>
@@ -618,6 +637,7 @@ function renderDisk(){
 
 function addDisk(){
   S.disk.push({drive:'',display_name:'New Drive',check_interval_sec:60,thresholds:[]});
+  foldOpenNew('disk', S.disk.length-1);
   renderDisk(); markDirty();
 }
 function rmDisk(i){ if(confirm('Remove this drive?')){ S.disk.splice(i,1); foldShift('disk', i, -1); renderDisk(); markDirty(); } }
@@ -630,12 +650,12 @@ function renderNetwork(){
   </div>
   ${S.network.map((n,i)=>`
   <div class="card">
-    <div class="ch open" onclick="tog(this)">
+    <div class="ch" onclick="tog(this)">
       <span class="cv">${ico('chevron')}</span>
       <span class="ct">${esc(n.name||n.host)}</span>
       <button class="btn dan sm" onclick="event.stopPropagation();rmNetwork(${i})" title="Remove">${ico('trash')}Remove</button>
     </div>
-    <div class="cb open">
+    <div class="cb">
       <div class="grid">
         <div class="fg"><label>Name</label><input type="text" value="${esc(n.name)}" data-p="network.${i}.name"></div>
         <div class="fg"><label>Host / IP</label><input type="text" value="${esc(n.host)}" data-p="network.${i}.host"></div>
@@ -661,6 +681,7 @@ function renderNetwork(){
 
 function addNetwork(){
   S.network.push({name:'',host:'',port:80,protocol:'tcp',timeout_sec:5,check_interval_sec:30,thresholds:[]});
+  foldOpenNew('network', S.network.length-1);
   renderNetwork(); markDirty();
 }
 function rmNetwork(i){ if(confirm('Remove this monitor?')){ S.network.splice(i,1); foldShift('network', i, -1); renderNetwork(); markDirty(); } }
@@ -697,12 +718,12 @@ function renderDocument(){
       <div class="fg"><label>Unit (shown before values)</label><input type="text" value="${esc(doc.unit)}" data-p="${p}.unit"></div>`;
     return `
   <div class="card">
-    <div class="ch open" onclick="tog(this)">
+    <div class="ch" onclick="tog(this)">
       <span class="cv">${ico('chevron')}</span>
       <span class="ct">${esc(doc.display_name||'Document')}</span>
       <button class="btn dan sm" onclick="event.stopPropagation();rmDocument(${i})" title="Remove">${ico('trash')}Remove</button>
     </div>
-    <div class="cb open">
+    <div class="cb">
       <div class="grid">
         <div class="fg"><label>Display Name (must be unique)</label><input type="text" value="${esc(doc.display_name)}" data-p="${p}.display_name"></div>
         <div class="fg"><label>Check Interval (sec)</label><input type="number" value="${esc(doc.check_interval_sec)}" data-p="${p}.check_interval_sec"></div>
@@ -731,6 +752,7 @@ function addDocument(){
   const doc=clone(DOC_DEFAULT);
   for(let n=2; names.has(doc.display_name); n++) doc.display_name='New document '+n;
   S.document.push(doc);
+  foldOpenNew('document', S.document.length-1);
   renderDocument(); markDirty();
 }
 function rmDocument(i){ if(confirm('Remove this document monitor?')){ S.document.splice(i,1); foldShift('document', i, -1); renderDocument(); markDirty(); } }

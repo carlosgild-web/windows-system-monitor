@@ -26,6 +26,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   accepted everywhere. `document_state.json` now holds a `documents` list, and `/api/status` returns `documents`.
 - The doctor checks every document, flags duplicate names, and only warns when a file_size file does not exist yet.
 - The Document card is first on the console.
+- The settings editor shows every monitor collapsed (Processes, Disk, Network, Document cards, and all thresholds)
+  each time you open a section, so you unfold only the one to edit. Within a section, what you unfold stays
+  unfolded through saves; a monitor you just added opens.
 
 ### Fixed
 - **Open Monitoring settings** no longer opens the editor of another copy of the project. When port 5757 is
