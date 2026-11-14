@@ -8,7 +8,7 @@ hand or with the settings editor (`start_editor.bat`, http://localhost:5757). Af
 3. Restart with `start_monitoring.bat`. Monitors read the file at startup, and the launcher's preflight blocks a
    broken config before stopping the monitors that are already running.
 
-Relative paths (`global.log_file`, `global.scripts_dir`, `document.path`) are resolved against the project
+Relative paths (`global.log_file`, `global.scripts_dir`, each `document[].path`) are resolved against the project
 folder, so the repository works wherever it is cloned.
 
 ---
@@ -23,7 +23,7 @@ folder, so the repository works wherever it is cloned.
   "performance": { "cpu": {...}, "memory": {...} },
   "disk":        [ ...drives... ],
   "network":     [ ...hosts / ports... ],
-  "document":    { ...one number from a CSV or Excel file... },
+  "document":    [ ...a total in a CSV / Excel file, or a file's size... ],
   "others":      { reserved for future monitor types }
 }
 ```
@@ -105,49 +105,81 @@ A drive that is not present is reported as `unknown` in the console, and the doc
 
 ## `document`
 
-One number from a file, watched like a metric: the sum of `value_column` over the rows where `filter_column`
-equals `filter_value`, compared with `target`. It shows that the same thresholds and actions work for business data,
-not just system metrics. The default watches a made-up monthly budget.
+A list of documents, each watched like a metric. A document's number is either:
+
+- `"measure": "sum"` (the default): the sum of `value_column` over the rows where `filter_column` equals
+  `filter_value` in a CSV or Excel file. This shows that the same thresholds and actions work for business data,
+  not just system metrics.
+- `"measure": "file_size"`: the file's size in `size_unit`, for a log, an export or a report that must not grow too
+  big (or must reach a minimum size).
+
+Either way the number is compared with `target`. The defaults watch two lines of a made-up monthly budget and the
+size of the monitors' own log:
 
 ```json
-"document": {
-  "display_name": "Groceries spend (monthly budget)",
-  "path": "sample_data\\monthly_budget_sample.csv",
-  "filter_column": "Category", "filter_value": "Groceries", "value_column": "Amount",
-  "target": 400, "unit": "$", "check_interval_sec": 30,
-  "thresholds": [
-    { "level": "warning",  "condition": "above", "percent_of_target": 80,  "actions": [ ... ] },
-    { "level": "critical", "condition": "above", "percent_of_target": 100, "actions": [ ... ] }
-  ]
-}
+"document": [
+  {
+    "display_name": "Groceries spend (monthly budget)",
+    "measure": "sum",
+    "path": "sample_data\\monthly_budget_sample.csv",
+    "filter_column": "Category", "filter_value": "Groceries", "value_column": "Amount",
+    "target": 400, "unit": "$", "check_interval_sec": 30,
+    "thresholds": [
+      { "level": "warning",  "condition": "above", "percent_of_target": 80,  "actions": [ ... ] },
+      { "level": "critical", "condition": "above", "percent_of_target": 100, "actions": [ ... ] }
+    ]
+  },
+  {
+    "display_name": "Monitor log size",
+    "measure": "file_size",
+    "path": "logs\\monitor.log",
+    "size_unit": "MB", "target": 50, "check_interval_sec": 60,
+    "thresholds": [
+      { "level": "warning",  "condition": "above", "percent_of_target": 80, "actions": [ ... ] },
+      { "level": "critical", "condition": "above", "percent_of_target": 95, "actions": [ ... ] }
+    ]
+  }
+]
 ```
 
-| Field | Description |
-|---|---|
-| `path` | `.csv` (no Excel needed) or `.xlsx`/`.xlsm` (needs Microsoft Excel). Relative to the project folder. |
-| `sheet_name` | Worksheet to read. Excel files only. |
-| `filter_column` / `filter_value` | Rows are included when this column equals this value (not case-sensitive). |
-| `value_column` | Column that is summed. Cells that are not numbers are skipped. |
-| `target` | The 100 % mark for `percent_of_target`. |
-| `unit` | Optional text shown before values, such as `$`. |
-| `check_interval_sec` | Seconds between reads. Settings are re-read every cycle, so changes apply without a restart. |
+| Field | Applies to | Description |
+|---|---|---|
+| `display_name` | all | Shown in the console and in `{document}`. **Must be unique**: it keys alerts and console rows (the doctor checks). |
+| `measure` | all | `sum` (default when missing) or `file_size`. |
+| `path` | all | Relative to the project folder. `sum`: `.csv` (no Excel needed) or `.xlsx`/`.xlsm` (needs Microsoft Excel). `file_size`: any file. |
+| `sheet_name` | sum | Worksheet to read. Excel files only. |
+| `filter_column` / `filter_value` | sum | Rows are included when this column equals this value (not case-sensitive). |
+| `value_column` | sum | Column that is summed. Cells that are not numbers are skipped. |
+| `unit` | sum | Optional text shown before values, such as `$`. |
+| `size_unit` | file_size | `KB`, `MB` (default) or `GB`. `target` is in this unit, and so are `{current_value}` and `{unit}`. |
+| `target` | all | The 100 % mark for `percent_of_target`. |
+| `check_interval_sec` | all | Seconds between reads. Settings are re-read every pass, so adding a document or changing one applies without a restart. |
 
 **Thresholds** use `percent_of_target` and a `condition`:
 
-- `"above"`: bad when the total grows (a spend, an error count). Fires at `total >= percent_of_target % of target`.
-- `"below"`: bad when the total falls short (a sales goal, a stock level). Fires at `total < percent_of_target % of target`.
+- `"above"`: bad when the number grows (a spend, an error count, a file size). Fires at `value >= percent_of_target % of target`.
+- `"below"`: bad when the number falls short (a sales goal, a stock level, an export that must not be empty). Fires at `value < percent_of_target % of target`.
 
-The incident closes once the total is `clear_margin` points (default 5) back on the good side, after `clear_sec`
-(default 0, because the file only changes when someone saves it).
+The incident closes once the value is `clear_margin` points (default 5) back on the good side, after `clear_sec`
+(default 0, because a file only changes when someone saves it).
+
+**File size and missing files**: a `file_size` document whose file does not exist yet counts as 0, with a note in
+the console. So `above` thresholds stay quiet (a log that has not been written yet is not too big) and `below`
+thresholds fire (an export that never arrived is a problem). The doctor reports such a file as a warning, not a
+failure. A missing file with `sum` is an error, since there is nothing to add up. A folder is always an error.
 
 **CSV files**: comma or semicolon delimited (detected from the header), UTF-8 with or without a BOM. Numbers may use
 a decimal point (`1,234.50`) or a decimal comma (`12,50`).
 
 **Excel files** are read through Excel COM in a short-lived child process (`scripts/lib/Read-XlsxTotal.ps1`), which is
-slow (seconds per read) and needs Office. The made-up `sample_data/ebook_sales_sample.xlsx` works with
-`"sheet_name": "Actual"`, `"filter_column": "Subtype"`, `"filter_value": "Ebook"`, `"value_column": "Out"` and a
-`"below"` threshold, like the v1.5 Ebook Sales monitor.
+slow (seconds per read) and needs Office. `file_size` never opens Excel, whatever the file type. The made-up
+`sample_data/ebook_sales_sample.xlsx` works with `"sheet_name": "Actual"`, `"filter_column": "Subtype"`,
+`"filter_value": "Ebook"`, `"value_column": "Out"` and a `"below"` threshold, like the v1.5 Ebook Sales monitor.
 
+> **Upgrading from v1.6:** `document` was a single object. It is now a list, but a single object is still accepted
+> everywhere (monitor, console, editor, doctor, simulator) and is treated as a one-item list. The editor saves it
+> back as a list.
+>
 > **Upgrading from v1.5:** the `ebook_sales` section is replaced by `document` and is ignored (the doctor warns).
 > `xlsx_path` → `path`, `subtype_column` → `filter_column`, `data_column` → `value_column`, `target_usd` → `target`.
 
@@ -229,11 +261,11 @@ start long-running work with `Start-Process`.
 | `{hostname}` | all | Computer name |
 | `{global.<field>}` | all | Any field of `global`, e.g. `{global.email_recipient}` |
 | `{proc_name}`, `{proc_display}` | processes | Executable and display name |
-| `{current_value}` | performance, disk, network, document | Measured value (%, % used, ms / `unreachable`, or the document total) |
+| `{current_value}` | performance, disk, network, document | Measured value (%, % used, ms / `unreachable`, the document total, or the file size in `size_unit`) |
 | `{percent}`, `{sustain_sec}` | performance | Threshold settings |
 | `{percent_used}`, `{free_gb}` | disk | Threshold and current free space |
 | `{host}`, `{port}`, `{latency_ms}` | network | Target and latency threshold |
-| `{document}`, `{target}`, `{unit}` | document | Display name, target and unit |
+| `{document}`, `{target}`, `{unit}` | document | Display name, target and unit (`unit` for `sum`, `size_unit` for `file_size`) |
 | `{current_percent}`, `{percent_of_target}` | document | Total as % of target, and the threshold |
 
 ---
@@ -248,7 +280,7 @@ Each monitor writes a JSON state file to `logs/` on every cycle. The console rea
 | performance | `performance_state.json` | `metrics[]`: `current_value`, `current_level` |
 | disk | `disk_state.json` | `drives[]`: `percent_used`, `free_gb`, `current_level` |
 | network | `network_state.json` | `hosts[]`: `reachable`, `latency_ms`, `current_level` |
-| document | `document_state.json` | `total`, `target`, `percent_of_target`, `current_level`, `error` |
+| document | `document_state.json` | `documents[]`: `measure`, `total`, `target`, `unit`, `percent_of_target`, `current_level`, `error`, `note` |
 
 Every file has an `updated` timestamp. The console and the doctor treat a monitor as alive only while
 `now - updated < 2 × check interval + 15 s`.

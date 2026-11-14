@@ -74,6 +74,9 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
 - **`docker/`**: `simulator.py` writes the same state files as the monitors (re-reads the settings every cycle; keep
   its output in step with the monitors' state-file formats), `run_demo.py` runs simulator + editor + console in one
   container, `smoke_test.py` is the CI check. New files the image needs must be added to the `Dockerfile` COPY lines.
+- **`POST /api/monitors/start|stop`** (console, the demo banner): starts the missing monitors / stops all five,
+  matched on the full script path so another copy of the project on the machine is left alone. The console and
+  the editor keep running.
 - **`POST /api/open-editor`** (console): starts `server.py --no-browser` hidden with its full path (that's how
   `stop_monitoring.ps1` finds it) unless port 5757 already answers, waits for it, and returns its URL.
 - **Web UI**: the console page is `web/console.html` (plain HTML/JS, no build step); the editor is
@@ -101,7 +104,11 @@ doctor afterwards. Full reference: `docs/configuration.md`.
 - **Template variables:** `{timestamp}`, `{hostname}`, `{global.<field>}` everywhere; `{proc_name}`, `{proc_display}`
   (processes); `{current_value}`, `{percent}`, `{sustain_sec}` (CPU/memory); `{current_value}`, `{percent_used}`,
   `{free_gb}` (disk); `{host}`, `{port}`, `{current_value}`, `{latency_ms}` (network; `{latency_ms}` is the threshold);
-  `{document}`, `{current_value}`, `{current_percent}`, `{target}`, `{unit}`, `{percent_of_target}` (document).
+  `{document}`, `{current_value}`, `{current_percent}`, `{target}`, `{unit}`, `{percent_of_target}` (document;
+  for `measure: "file_size"`, `{current_value}` and `{target}` are in `size_unit` and `{unit}` is that unit).
+- **Documents:** `document` is a list (a v1.6 single object is still accepted: normalize with `@($cfg.document)` /
+  `as_list()` / `normalizeSettings()`). `display_name` must be unique. `measure` is `sum` (default) or `file_size`;
+  a missing file_size file counts as 0.
 
 ### Adding a new monitor type
 
