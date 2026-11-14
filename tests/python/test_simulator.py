@@ -36,15 +36,43 @@ class SimulatorTests(unittest.TestCase):
             datetime.strptime(data["updated"], sim.FMT)       # same timestamp format as the monitors
         self.assertFalse(list((self.tmp / "logs").glob("*.tmp")), "writes are atomic")
 
+    def docs(self):
+        return {d["display_name"]: d for d in sim.Simulator().documents(self.cfg, datetime.now())["documents"]}
+
     def test_document_uses_the_real_csv_and_thresholds(self):
-        doc = sim.Simulator().document(self.cfg, datetime.now())
+        doc = self.docs()["Groceries spend (monthly budget)"]
         self.assertEqual((doc["total"], doc["percent_of_target"], doc["current_level"]), (340.15, 85.0, "warning"))
-        self.cfg["document"]["target"] = 300
-        self.assertEqual(sim.Simulator().document(self.cfg, datetime.now())["current_level"], "critical")
+        self.cfg["document"][0]["target"] = 300
+        self.assertEqual(self.docs()["Groceries spend (monthly budget)"]["current_level"], "critical")
+
+    def test_every_shipped_document_is_reported(self):
+        docs = self.docs()
+        self.assertEqual(len(docs), len(self.cfg["document"]))
+        self.assertEqual(docs["Eating out spend (monthly budget)"]["current_level"], "ok")
+        self.assertTrue(all(d["error"] is None for d in docs.values()))
 
     def test_document_explains_excel_files(self):
-        self.cfg["document"]["path"] = "sample_data\\book.xlsx"
-        self.assertIn("CSV documents only", sim.Simulator().document(self.cfg, datetime.now())["error"])
+        self.cfg["document"][0]["path"] = "sample_data\\book.xlsx"
+        self.assertIn("CSV documents only", self.docs()["Groceries spend (monthly budget)"]["error"])
+
+    def test_file_size_reads_the_real_file(self):
+        log = self.tmp / "logs" / "monitor.log"
+        log.parent.mkdir(exist_ok=True)
+        log.write_bytes(b"x" * (2 * 1024 * 1024))           # 2 MB of a 50 MB target: 4 %
+        doc = self.docs()["Monitor log size"]
+        self.assertEqual((doc["total"], doc["unit"], doc["percent_of_target"], doc["current_level"]),
+                         (2.0, "MB", 4.0, "ok"))
+        self.cfg["document"][2]["target"] = 2.2              # 2 MB is now 90.9 %: warning
+        self.assertEqual(self.docs()["Monitor log size"]["current_level"], "warning")
+
+    def test_file_size_counts_a_missing_file_as_zero(self):
+        doc = self.docs()["Monitor log size"]
+        self.assertEqual((doc["total"], doc["current_level"], doc["error"]), (0.0, "ok", None))
+        self.assertIn("not created yet", doc["note"])
+
+    def test_v16_single_document_object_still_works(self):
+        self.cfg["document"] = self.cfg["document"][0]
+        self.assertEqual(list(self.docs()), ["Groceries spend (monthly budget)"])
 
     def test_notepad_is_the_only_process_that_stops(self):
         s = sim.Simulator()

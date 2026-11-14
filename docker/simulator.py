@@ -9,7 +9,7 @@ console and editor can be shown on any OS.
 What is real and what is simulated:
 - Read from monitoring_settings.json every cycle (edit it in the editor and the demo follows):
   the processes, metrics, drives, hosts and thresholds.
-- Real: the document monitor reads the actual CSV and applies its thresholds; localhost
+- Real: the document monitor reads the actual CSV (or the file size) and applies its thresholds; localhost
   network targets (the console and the editor in this container) are real TCP checks.
 - Simulated: CPU and memory (a random walk with occasional spikes), disk usage, public
   host latency, and Notepad, which "closes" for a while every couple of minutes.
@@ -31,6 +31,7 @@ LOGS = BASE / "logs"
 INTERVAL = float(os.environ.get("SIM_INTERVAL_SEC", "3"))
 FMT = "%Y-%m-%d %H:%M:%S"
 rng = random.Random(os.environ.get("SIM_SEED"))
+SIZE_UNITS = {"KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}
 
 
 def now_str(t=None):
@@ -191,35 +192,63 @@ class Simulator:
         except ValueError:
             return None
 
-    def document(self, cfg, now):
-        doc = cfg.get("document")
-        state = {"updated": now_str(now), "monitor_pid": os.getpid(),
-                 "display_name": (doc or {}).get("display_name", "Document"), "path": (doc or {}).get("path"),
-                 "total": None, "target": None, "unit": (doc or {}).get("unit", ""),
-                 "percent_of_target": None, "current_level": "unknown", "error": None}
-        if not doc:
-            state["error"] = 'No "document" section in monitoring_settings.json'
-            return state
-        path = BASE / str(doc.get("path", "")).replace("\\", "/")
+    @staticmethod
+    def _documents_cfg(cfg):
+        """"document" is a list since v1.7; a v1.6 single object is still accepted."""
+        docs = cfg.get("document")
+        if isinstance(docs, dict):
+            docs = [docs] if docs else []
+        return [d for d in (docs or []) if isinstance(d, dict)]
+
+    def _csv_total(self, doc, path):
+        """(total, error) for measure "sum": the real CSV, like DocumentReader.ps1."""
         if path.suffix.lower() not in (".csv", ".txt"):
-            state["error"] = "The demo container reads CSV documents only (Excel needs Windows)"
-            return state
+            return None, "The demo container reads CSV documents only (Excel needs Windows)"
         try:
             text = path.read_text(encoding="utf-8-sig")
         except OSError:
-            state["error"] = f"File not found: {doc.get('path')}"
-            return state
+            return None, f"File not found: {doc.get('path')}"
         header = text.splitlines()[0] if text.strip() else ""
         delim = ";" if header.count(";") > header.count(",") else ","
         rows = list(csv.DictReader(io.StringIO(text), delimiter=delim))
         cols = {c.strip().lower(): c for c in (rows[0].keys() if rows else header.split(delim))}
         fcol, vcol = cols.get(str(doc.get("filter_column", "")).lower()), cols.get(str(doc.get("value_column", "")).lower())
         if not fcol or not vcol:
-            state["error"] = "Column not found"
-            return state
+            return None, "Column not found"
         want = str(doc.get("filter_value", "")).strip().lower()
-        total = round(sum(n for r in rows if str(r.get(fcol, "")).strip().lower() == want
-                          for n in [self._number(r.get(vcol))] if n is not None), 2)
+        return round(sum(n for r in rows if str(r.get(fcol, "")).strip().lower() == want
+                         for n in [self._number(r.get(vcol))] if n is not None), 2), None
+
+    def document(self, doc, now):
+        """One document's state row (the same fields monitor_document.ps1 writes)."""
+        measure = str(doc.get("measure") or "sum").lower()
+        size_unit = str(doc.get("size_unit") or "MB").upper()
+        if size_unit not in SIZE_UNITS:
+            size_unit = "MB"
+        state = {"display_name": doc.get("display_name") or "Document", "path": doc.get("path"),
+                 "measure": measure, "total": None, "target": None,
+                 "unit": size_unit if measure == "file_size" else doc.get("unit", ""),
+                 "percent_of_target": None, "current_level": "unknown", "error": None, "note": None,
+                 "last_check": now_str(now)}
+        path = BASE / str(doc.get("path", "")).replace("\\", "/")
+        if not doc.get("path"):
+            state["error"] = "document.path is not set"
+            return state
+        if measure == "file_size":
+            if path.is_dir():
+                state["error"] = "The path is a folder, not a file"
+                return state
+            if path.is_file():
+                total = round(path.stat().st_size / SIZE_UNITS[size_unit], 2)
+            else:
+                total, state["note"] = 0.0, "File not created yet: counted as 0"
+        elif measure == "sum":
+            total, state["error"] = self._csv_total(doc, path)
+            if total is None:
+                return state
+        else:
+            state["error"] = f"Unknown measure '{measure}': use sum or file_size"
+            return state
         target = float(doc.get("target") or 0)
         pct = round(total / target * 100, 1) if target > 0 else None
         level = "ok"
@@ -234,6 +263,10 @@ class Simulator:
                      current_level=level if pct is not None else "unknown")
         return state
 
+    def documents(self, cfg, now):
+        return {"updated": now_str(now), "monitor_pid": os.getpid(),
+                "documents": [self.document(d, now) for d in self._documents_cfg(cfg)]}
+
     def tick(self):
         cfg = load_settings()
         now = datetime.now()
@@ -241,7 +274,7 @@ class Simulator:
         write_json("performance_state.json", self.performance(cfg, now))
         write_json("disk_state.json", self.disk(cfg, now))
         write_json("network_state.json", self.network(cfg, now))
-        write_json("document_state.json", self.document(cfg, now))
+        write_json("document_state.json", self.documents(cfg, now))
 
 
 def main():

@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- Start / Stop monitoring buttons in the console's demo banner (`POST /api/monitors/start|stop`). They act on all
+  five monitors of this install only, matched by full script path; the console and the editor keep running.
+- Document `measure: "file_size"`: watch a file's size in KB, MB or GB against a target. A file that does not exist
+  yet counts as 0.
+- Two more sample documents: Eating out spend (budget CSV) and Monitor log size (`logs\monitor.log`).
+- The editor's Document section has **+ Add Monitor**, Remove and a Measure picker.
+
+### Changed
+- `document` is now a list, like `disk` and `network` (`_meta.version` 1.7.0). A v1.6 single object is still
+  accepted everywhere. `document_state.json` now holds a `documents` list, and `/api/status` returns `documents`.
+- The doctor checks every document, flags duplicate names, and only warns when a file_size file does not exist yet.
+- The Document card is first on the console.
+
 ## [1.6.0] - 2026-11-13
 
 A portfolio-ready release: a redesigned UI with a built-in demo guide, a default test environment that works

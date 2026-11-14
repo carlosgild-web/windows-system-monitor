@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "version": "1.6.0",
-    "last_updated": "2026-11-13",
-    "description": "Default test environment: one or more monitors per category for things every Windows 10/11 PC has, plus demo toggles (Notepad, the settings editor, the budget CSV). See docs/test-environment.md.",
+    "version": "1.7.0",
+    "last_updated": "2026-11-14",
+    "description": "Default test environment: one or more monitors per category for things every Windows 10/11 PC has, plus demo toggles (Notepad, the settings editor, the budget CSV, the monitor log size). See docs/test-environment.md.",
     "update_notes": "Bump version and update last_updated whenever you change this file."
   },
   "global": {
@@ -342,55 +342,144 @@
       ]
     }
   ],
-  "document": {
-    "display_name": "Groceries spend (monthly budget)",
-    "path": "sample_data\\monthly_budget_sample.csv",
-    "filter_column": "Category",
-    "filter_value": "Groceries",
-    "value_column": "Amount",
-    "target": 400,
-    "unit": "$",
-    "check_interval_sec": 30,
-    "thresholds": [
-      {
-        "level": "warning",
-        "condition": "above",
-        "percent_of_target": 80,
-        "description": "Groceries spend above 80% of the monthly budget",
-        "actions": [
-          {
-            "type": "log_to_file",
-            "level": "warning",
-            "message_template": "[{timestamp}] WARNING DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"
-          }
-        ]
-      },
-      {
-        "level": "critical",
-        "condition": "above",
-        "percent_of_target": 100,
-        "description": "Groceries budget used up",
-        "actions": [
-          {
-            "type": "log_to_file",
-            "level": "critical",
-            "message_template": "[{timestamp}] CRITICAL DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"
-          },
-          {
-            "type": "popup",
-            "title": "Budget alert: {document}",
-            "message_template": "{document} is at {unit}{current_value}, {current_percent}% of the {unit}{target} budget."
-          },
-          {
-            "type": "email_draft",
-            "to": "{global.email_recipient}",
-            "subject_template": "[CRITICAL] {document} over budget on {hostname} — {timestamp}",
-            "body_template": "Document: {document}\nTimestamp: {timestamp}\nCurrent total: {unit}{current_value}\nTarget: {unit}{target}\nUsed: {current_percent}%\nThreshold: {percent_of_target}%\n\nReview the spending in the source file."
-          }
-        ]
-      }
-    ]
-  },
+  "document": [
+    {
+      "display_name": "Groceries spend (monthly budget)",
+      "measure": "sum",
+      "path": "sample_data\\monthly_budget_sample.csv",
+      "filter_column": "Category",
+      "filter_value": "Groceries",
+      "value_column": "Amount",
+      "target": 400,
+      "unit": "$",
+      "check_interval_sec": 30,
+      "thresholds": [
+        {
+          "level": "warning",
+          "condition": "above",
+          "percent_of_target": 80,
+          "description": "Groceries spend above 80% of the monthly budget",
+          "actions": [
+            {
+              "type": "log_to_file",
+              "level": "warning",
+              "message_template": "[{timestamp}] WARNING DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"
+            }
+          ]
+        },
+        {
+          "level": "critical",
+          "condition": "above",
+          "percent_of_target": 100,
+          "description": "Groceries budget used up",
+          "actions": [
+            {
+              "type": "log_to_file",
+              "level": "critical",
+              "message_template": "[{timestamp}] CRITICAL DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"
+            },
+            {
+              "type": "popup",
+              "title": "Budget alert: {document}",
+              "message_template": "{document} is at {unit}{current_value}, {current_percent}% of the {unit}{target} budget."
+            },
+            {
+              "type": "email_draft",
+              "to": "{global.email_recipient}",
+              "subject_template": "[CRITICAL] {document} over budget on {hostname} — {timestamp}",
+              "body_template": "Document: {document}\nTimestamp: {timestamp}\nCurrent total: {unit}{current_value}\nTarget: {unit}{target}\nUsed: {current_percent}%\nThreshold: {percent_of_target}%\n\nReview the spending in the source file."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "display_name": "Eating out spend (monthly budget)",
+      "measure": "sum",
+      "path": "sample_data\\monthly_budget_sample.csv",
+      "filter_column": "Category",
+      "filter_value": "Eating out",
+      "value_column": "Amount",
+      "target": 60,
+      "unit": "$",
+      "check_interval_sec": 30,
+      "thresholds": [
+        {
+          "level": "warning",
+          "condition": "above",
+          "percent_of_target": 80,
+          "description": "Eating out above 80% of its monthly budget",
+          "actions": [
+            {
+              "type": "log_to_file",
+              "level": "warning",
+              "message_template": "[{timestamp}] WARNING DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"
+            }
+          ]
+        },
+        {
+          "level": "critical",
+          "condition": "above",
+          "percent_of_target": 100,
+          "description": "Eating out budget used up",
+          "actions": [
+            {
+              "type": "log_to_file",
+              "level": "critical",
+              "message_template": "[{timestamp}] CRITICAL DOC: {document} at {unit}{current_value} ({current_percent}% of {unit}{target}; threshold {percent_of_target}%)"
+            },
+            {
+              "type": "popup",
+              "title": "Budget alert: {document}",
+              "message_template": "{document} is at {unit}{current_value}, {current_percent}% of the {unit}{target} budget."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "display_name": "Monitor log size",
+      "measure": "file_size",
+      "path": "logs\\monitor.log",
+      "size_unit": "MB",
+      "target": 50,
+      "check_interval_sec": 60,
+      "thresholds": [
+        {
+          "level": "warning",
+          "condition": "above",
+          "percent_of_target": 80,
+          "description": "Monitor log above 80% of its 50 MB rotation size",
+          "actions": [
+            {
+              "type": "log_to_file",
+              "level": "warning",
+              "message_template": "[{timestamp}] WARNING DOC: {document} is {current_value} {unit} ({current_percent}% of {target} {unit}; threshold {percent_of_target}%)"
+            }
+          ]
+        },
+        {
+          "level": "critical",
+          "condition": "above",
+          "percent_of_target": 95,
+          "description": "Monitor log about to rotate (95% of 50 MB)",
+          "actions": [
+            {
+              "type": "log_to_file",
+              "level": "critical",
+              "message_template": "[{timestamp}] CRITICAL DOC: {document} is {current_value} {unit} ({current_percent}% of {target} {unit}; threshold {percent_of_target}%)"
+            },
+            {
+              "type": "email_draft",
+              "to": "{global.email_recipient}",
+              "subject_template": "[CRITICAL] {document} on {hostname} at {current_value} {unit} — {timestamp}",
+              "body_template": "Document: {document}\nTimestamp: {timestamp}\nFile size: {current_value} {unit}\nLimit: {target} {unit}\nUsed: {current_percent}%\nThreshold: {percent_of_target}%\n\nThe log rotates at global.log_max_size_mb. Check what is logging so much."
+            }
+          ]
+        }
+      ]
+    }
+  ],
   "others": {
     "_comment": "Pending to define. Add new monitoring sections here following the same pattern: name, check_interval_sec, thresholds [ { level, condition/value, actions [] } ]",
     "items": []
