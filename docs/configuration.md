@@ -196,8 +196,6 @@ slow (seconds per read) and needs Office. `file_size` never opens Excel, whateve
 
 ¹ Process actions use `instructions` instead of `message_template`.
 
-### Incidents, spam guard and email cooldown
-
 ### The ticket preview (`email_draft`)
 
 An `email_draft` action doesn't open your mail client straight away. It first opens a small window with the alert
@@ -222,8 +220,14 @@ How the fields are filled:
 
 Each ticket is saved as `logs/tickets/<number>.html` (open it again any time) from the template
 [`web/ticket.html`](../web/ticket.html); the next number is kept in `logs/tickets/next_number.txt`. The window is a
-Microsoft Edge app window (no tabs or address bar), or the default browser when Edge is missing. If the preview
-can't be created, the email opens directly as before, so an alert is never lost.
+Microsoft Edge app window (no tabs or address bar), or the default browser when Edge is missing. It is sized to fit
+the screen the mouse pointer is on (at most 900 × 880, centered), and its buttons stay visible while the ticket
+scrolls. If the preview can't be created, the email opens directly as before, so an alert is never lost.
+
+A ticket opens once per item and level per hour (the [email cooldown](#incidents-spam-guard-and-email-cooldown)
+below); saving the settings starts that hour over.
+
+### Incidents, spam guard and email cooldown
 
 Three rules keep a noisy metric from flooding you with popups and email drafts.
 
@@ -246,10 +250,12 @@ per incident, and the log and remediation keep going.
 
 **3. Email cooldown.** Even across separate incidents, `email_draft` opens at most one draft per item and level
 within `global.email_cooldown_min` minutes (default 60, `0` turns it off). The last-sent times are saved in
-`logs/alert_state.json`, so restarting the monitors does not reset the cooldown. A skipped draft is logged:
+`logs/alert_state.json`, so restarting the monitors does not reset the cooldown. Saving `monitoring_settings.json`
+(in the editor or by hand) does: a changed threshold is a new test, so the next incident after a save opens a ticket
+again, while a value flapping on its own stays limited. A skipped draft is logged:
 
 ```
-[2026-11-13 10:42:00] INFO email_draft for performance|memory|critical skipped: one was opened less than 60 min ago (global.email_cooldown_min)
+[2026-11-13 10:42:00] INFO email_draft for performance|memory|critical skipped: one was opened less than 60 min ago (global.email_cooldown_min; saving the settings resets it)
 ```
 
 Processes don't need hysteresis (they are either running or not), but their `email_draft` actions share the same

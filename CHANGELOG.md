@@ -16,7 +16,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - **Ticket preview for `email_draft`**: instead of opening the mail client straight away, the alert opens as a
   simulated ServiceNow-style incident (number, state, category, configuration item, impact, urgency, priority,
   severity, assignment group, description, activity). From there you preview the notification email and open it in
-  your mail client. Saved in `logs/tickets/`; template `web/ticket.html`.
+  your mail client. Saved in `logs/tickets/`; template `web/ticket.html`. The window fits the screen it opens on
+  (at most 900 × 880, centered) and its buttons stay visible while the ticket scrolls.
+- Saving the settings restarts the email cooldown, so the next incident after you change a threshold opens a
+  ticket again (it used to stay silent for up to an hour; the log said why, but nothing on screen did).
 
 ### Changed
 - `document` is now a list, like `disk` and `network` (`_meta.version` 1.7.0). A v1.6 single object is still

@@ -46,7 +46,7 @@ budget (at 85 %). Each one can be turned green.
    around the line, and closes once RAM is 5 points under it for the sustain time.
 
 The same works for CPU. For a **critical** alert, lower the critical threshold instead: it also opens a ticket preview
-(once per hour per alert, see [Incidents, spam guard and email cooldown](configuration.md#incidents-spam-guard-and-email-cooldown))
+(once per hour per alert, or again after you save the settings; see [Incidents, spam guard and email cooldown](configuration.md#incidents-spam-guard-and-email-cooldown))
 and runs `scripts/actions/on_memory_critical.ps1`.
 
 ### Disk

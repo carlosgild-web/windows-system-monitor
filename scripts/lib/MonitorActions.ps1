@@ -185,16 +185,37 @@ function New-TicketPreview {
     return @{ Number = $number; Path = $path }
 }
 
+function Get-TicketWindowBounds {
+    # 900 x 880 when the screen has room; otherwise the work area (the screen minus the
+    # taskbar) less a margin, never below 480 x 400. Centered on that work area.
+    # PowerShell 5.1 is not DPI aware, so the work area comes in the same scaled pixels
+    # that Edge uses for --window-size and --window-position.
+    param([int]$Left = 0, [int]$Top = 0, [int]$Width = 0, [int]$Height = 0)
+    $w = 900; $h = 880
+    if ($Width -gt 0)  { $w = [Math]::Max(480, [Math]::Min($w, $Width - 48)) }
+    if ($Height -gt 0) { $h = [Math]::Max(400, [Math]::Min($h, $Height - 48)) }
+    $x = $Left + [Math]::Max(0, [int](($Width - $w) / 2))
+    $y = $Top + [Math]::Max(0, [int](($Height - $h) / 2))
+    return @{ Width = $w; Height = $h; X = $x; Y = $y }
+}
+
 function Open-TicketWindow ([string]$Path) {
     # A small window without tabs or an address bar (Edge app mode, on every Windows 10/11),
-    # falling back to the default browser.
+    # sized to fit the screen the mouse is on, falling back to the default browser.
     $uri  = ([Uri](Resolve-Path -LiteralPath $Path).ProviderPath).AbsoluteUri
     $edge = @(
         (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
         (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe')
     ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
     if ($edge) {
-        Start-Process -FilePath $edge -ArgumentList "--app=$uri", '--window-size=900,880'
+        $b = Get-TicketWindowBounds
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            $wa = [System.Windows.Forms.Screen]::FromPoint([System.Windows.Forms.Cursor]::Position).WorkingArea
+            $b = Get-TicketWindowBounds -Left $wa.X -Top $wa.Y -Width $wa.Width -Height $wa.Height
+        } catch { Write-ActionTrace "Screen size unknown, default ticket window: $_" Yellow }
+        Start-Process -FilePath $edge -ArgumentList "--app=$uri",
+            ('--window-size={0},{1}' -f $b.Width, $b.Height), ('--window-position={0},{1}' -f $b.X, $b.Y)
     } else {
         Start-Process -FilePath $Path
     }
@@ -220,7 +241,8 @@ function Request-EmailSlot ([string]$Key, $GlobalCfg, [datetime]$Now = (Get-Date
     # True (and the time is recorded) when no email for $Key was opened within the cooldown.
     # Every monitor process shares logs\alert_state.json, so the read-check-write runs under
     # a named mutex. If anything goes wrong the email is allowed: a duplicate draft is
-    # better than a missed alert.
+    # better than a missed alert. Saving the settings after the last email starts the
+    # cooldown over: a changed threshold is a new test, not the same metric flapping.
     $minutes = Get-EmailCooldownMinutes $GlobalCfg
     if ($minutes -le 0) { return $true }
     $path = Join-Path (Split-Path ([string]$GlobalCfg.log_file) -Parent) 'alert_state.json'
@@ -240,7 +262,11 @@ function Request-EmailSlot ([string]$Key, $GlobalCfg, [datetime]$Now = (Get-Date
             if ($last -isnot [datetime]) {
                 $last = [datetime]::ParseExact([string]$last, 'yyyy-MM-dd HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)
             }
-            if (($Now - $last).TotalMinutes -lt $minutes) { return $false }
+            $changed = [datetime]::MinValue
+            if ($MonitorSettingsFile -and (Test-Path -LiteralPath $MonitorSettingsFile)) {
+                $changed = (Get-Item -LiteralPath $MonitorSettingsFile).LastWriteTime
+            }
+            if (($Now - $last).TotalMinutes -lt $minutes -and $changed -le $last) { return $false }
         }
         $sent[$Key] = $Now.ToString('yyyy-MM-dd HH:mm:ss')
         $dir = Split-Path $path -Parent
@@ -272,7 +298,7 @@ function Invoke-MonitorActions {
                     if (-not $AlertKey -or (Request-EmailSlot $AlertKey $GlobalCfg)) {
                         Invoke-EmailAction $action $Vars $GlobalCfg $AlertKey
                     } else {
-                        $msg = '[{0}] INFO email_draft for {1} skipped: one was opened less than {2} min ago (global.email_cooldown_min)' -f
+                        $msg = '[{0}] INFO email_draft for {1} skipped: one was opened less than {2} min ago (global.email_cooldown_min; saving the settings resets it)' -f
                                (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $AlertKey, (Get-EmailCooldownMinutes $GlobalCfg)
                         Write-MonitorLog $msg $GlobalCfg
                         Write-ActionTrace "[email_draft] skipped (cooldown): $AlertKey" DarkYellow

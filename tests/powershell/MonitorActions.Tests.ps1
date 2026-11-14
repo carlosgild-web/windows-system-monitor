@@ -4,6 +4,9 @@ BeforeAll {
     $scripts = Join-Path $PSScriptRoot '..\..\scripts'
     . (Join-Path $scripts 'lib\MonitorCommon.ps1')
     . (Join-Path $scripts 'lib\MonitorActions.ps1')
+    # The email cooldown starts over when the settings file is saved after the last email.
+    # Point it away from the real file, which changes whenever someone edits the settings.
+    $MonitorSettingsFile = Join-Path $TestDrive 'no-settings.json'
 
     function New-GlobalCfg ([string]$LogFile, [double]$MaxMb = 50) {
         [pscustomobject]@{
@@ -235,10 +238,47 @@ Describe 'Request-EmailSlot (email cooldown)' {
         Get-EmailCooldownMinutes (New-GlobalCfg 'x.log') | Should -Be 60
     }
 
+    It 'starts over when the settings are saved after the last email' {
+        $settings = Join-Path $TestDrive 'settings-saved.json'
+        Set-Content $settings '{}'
+        (Get-Item $settings).LastWriteTime = $t0.AddMinutes(-10)
+        $MonitorSettingsFile = $settings
+        Request-EmailSlot 'document|Log|critical' $g $t0               | Should -BeTrue
+        Request-EmailSlot 'document|Log|critical' $g $t0.AddMinutes(2) | Should -BeFalse   # saved before: still blocked
+        (Get-Item $settings).LastWriteTime = $t0.AddMinutes(3)
+        Request-EmailSlot 'document|Log|critical' $g $t0.AddMinutes(4) | Should -BeTrue    # saved since: allowed
+        Request-EmailSlot 'document|Log|critical' $g $t0.AddMinutes(5) | Should -BeFalse   # and the cooldown runs again
+    }
+
     It 'allows the email when the state file is corrupt' {
         New-Item $dir -ItemType Directory | Out-Null
         Set-Content (Join-Path $dir 'alert_state.json') '{ not json'
         Request-EmailSlot 'k' $g $t0 | Should -BeTrue
+    }
+}
+
+Describe 'Get-TicketWindowBounds' {
+    It 'uses 900 x 880 centered when the screen has room' {
+        $b = Get-TicketWindowBounds -Left 0 -Top 0 -Width 1920 -Height 1040
+        $b.Width | Should -Be 900; $b.Height | Should -Be 880
+        $b.X | Should -Be 510; $b.Y | Should -Be 80
+    }
+
+    It 'fits a laptop work area (1536 x 816 at 125 % scaling)' {
+        $b = Get-TicketWindowBounds -Left 0 -Top 0 -Width 1536 -Height 816
+        $b.Height | Should -Be 768
+        ($b.Y + $b.Height) | Should -BeLessOrEqual 816
+    }
+
+    It 'centers on a second screen and keeps a minimum size' {
+        $b = Get-TicketWindowBounds -Left 1920 -Top 0 -Width 400 -Height 300
+        $b.Width | Should -Be 480; $b.Height | Should -Be 400
+        $b.X | Should -Be 1920; $b.Y | Should -Be 0
+    }
+
+    It 'falls back to 900 x 880 when the screen is unknown' {
+        $b = Get-TicketWindowBounds
+        $b.Width | Should -Be 900; $b.Height | Should -Be 880
     }
 }
 
@@ -340,6 +380,21 @@ Describe 'Invoke-ThresholdAlerts' {
         Should -Invoke Show-MonitorPopup -Times 2 -Exactly
         Should -Invoke Open-TicketWindow -Times 1 -Exactly
         @(Get-Content $log | Where-Object { $_ -like '*email_draft for performance|memory|critical skipped*' }).Count | Should -Be 1
+    }
+
+    It 'opens a new ticket when the settings were saved between two incidents' {
+        # what a person testing does: alert, change the threshold in the editor, alert again
+        $settings = Join-Path $dir 'settings.json'
+        New-Item $dir -ItemType Directory -Force | Out-Null
+        Set-Content $settings '{}'
+        # the cooldown stamps emails with the real clock, so the save times are real-clock too
+        (Get-Item $settings).LastWriteTime = (Get-Date).AddMinutes(-30)
+        $MonitorSettingsFile = $settings
+        $trackers = @{}
+        Invoke-RamSeries (@(96) * 7 + @(70) * 12) $trackers $t0 $g
+        (Get-Item $settings).LastWriteTime = (Get-Date).AddSeconds(5)
+        Invoke-RamSeries (@(96) * 7) $trackers $t0.AddSeconds(95) $g
+        Should -Invoke Open-TicketWindow -Times 2 -Exactly
     }
 
     It 'opens a draft for every new incident when the cooldown is off' {
