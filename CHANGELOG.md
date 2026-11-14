@@ -13,12 +13,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   yet counts as 0.
 - Two more sample documents: Eating out spend (budget CSV) and Monitor log size (`logs\monitor.log`).
 - The editor's Document section has **+ Add Monitor**, Remove and a Measure picker.
+- **Ticket preview for `email_draft`**: instead of opening the mail client straight away, the alert opens as a
+  simulated ServiceNow-style incident (number, state, category, configuration item, impact, urgency, priority,
+  severity, assignment group, description, activity). From there you preview the notification email and open it in
+  your mail client. Saved in `logs/tickets/`; template `web/ticket.html`. The window fits the screen it opens on
+  (at most 900 × 880, centered) and its buttons stay visible while the ticket scrolls.
+- Saving the settings restarts the email cooldown, so the next incident after you change a threshold opens a
+  ticket again (it used to stay silent for up to an hour; the log said why, but nothing on screen did).
 
 ### Changed
 - `document` is now a list, like `disk` and `network` (`_meta.version` 1.7.0). A v1.6 single object is still
   accepted everywhere. `document_state.json` now holds a `documents` list, and `/api/status` returns `documents`.
 - The doctor checks every document, flags duplicate names, and only warns when a file_size file does not exist yet.
 - The Document card is first on the console.
+- The settings editor shows every monitor collapsed (Processes, Disk, Network, Document cards, and all thresholds)
+  each time you open a section, so you unfold only the one to edit. Within a section, what you unfold stays
+  unfolded through saves; a monitor you just added opens.
 
 ### Fixed
 - **Open Monitoring settings** no longer opens the editor of another copy of the project. When port 5757 is
@@ -26,6 +36,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   project folder plus the settings version, never the path). It opens the editor only when it matches, and
   otherwise says what is on the port and to stop it. Before, a stale editor from another folder could show
   different settings than the console.
+- The settings editor keeps cards and thresholds collapsed or expanded as you left them after saving, reloading,
+  adding a threshold or removing an item. Before, it expanded everything again.
 
 ## [1.6.0] - 2026-11-13
 

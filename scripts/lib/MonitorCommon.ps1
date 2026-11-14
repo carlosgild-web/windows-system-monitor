@@ -11,6 +11,7 @@
 
 # $PSScriptRoot is this file's folder (scripts\lib) even when dot-sourced.
 $MonitorProjectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$MonitorSettingsFile = Join-Path $MonitorProjectRoot 'monitoring_settings.json'
 
 function Resolve-ProjectPath ([string]$Path) {
     if ([string]::IsNullOrWhiteSpace($Path))      { return $Path }
@@ -34,7 +35,7 @@ function Show-MonitorPopup ([string]$Title, [string]$Message) {
     Start-Process powershell.exe -ArgumentList '-NoProfile', '-WindowStyle', 'Hidden', '-EncodedCommand', $enc
 }
 
-function Get-MonitorSettings ([string]$Path = (Join-Path $MonitorProjectRoot 'monitoring_settings.json')) {
+function Get-MonitorSettings ([string]$Path = $MonitorSettingsFile) {
     if (-not (Test-Path $Path)) { throw "Settings file not found: $Path" }
     # -Encoding UTF8 is required: PowerShell 5.1 defaults to Windows-1252,
     # which corrupts non-ASCII characters in message templates.

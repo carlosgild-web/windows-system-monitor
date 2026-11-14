@@ -353,6 +353,14 @@ function Test-DoctorPaths ($Config) {
     if ($g.scripts_dir -and (Test-Path $g.scripts_dir)) { $r += New-DoctorResult $cat 'OK' 'Scripts folder' $g.scripts_dir }
     else { $r += New-DoctorResult $cat 'FAIL' 'Scripts folder' "Not found: $($g.scripts_dir)" }
 
+    # email_draft shows a ticket preview built from web\ticket.html
+    $usesEmail = @(Get-ActionGroups $Config | ForEach-Object { $_.Actions } | Where-Object { $_ -and $_.type -eq 'email_draft' }).Count -gt 0
+    if ($usesEmail) {
+        $template = Join-Path $MonitorProjectRoot 'web\ticket.html'
+        if (Test-Path $template) { $r += New-DoctorResult $cat 'OK' 'Ticket preview template' 'web\ticket.html (email_draft)' }
+        else { $r += New-DoctorResult $cat 'WARN' 'Ticket preview template' 'web\ticket.html missing: email_draft opens the email directly, without the ticket preview' }
+    }
+
     # run_script targets
     $seen = @{}
     foreach ($grp in Get-ActionGroups $Config) {

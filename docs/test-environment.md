@@ -45,8 +45,8 @@ budget (at 85 %). Each one can be turned green.
 3. After 10 s the row turns orange and the log gets `WARNING MEM: …`. The incident stays open while RAM hovers
    around the line, and closes once RAM is 5 points under it for the sustain time.
 
-The same works for CPU. For a **critical** alert, lower the critical threshold instead: it also opens an email draft
-(once per hour per alert, see [Incidents, spam guard and email cooldown](configuration.md#incidents-spam-guard-and-email-cooldown))
+The same works for CPU. For a **critical** alert, lower the critical threshold instead: it also opens a ticket preview
+(once per hour per alert, or again after you save the settings; see [Incidents, spam guard and email cooldown](configuration.md#incidents-spam-guard-and-email-cooldown))
 and runs `scripts/actions/on_memory_critical.ps1`.
 
 ### Disk
@@ -69,9 +69,11 @@ To see a **critical** network alert, disconnect from Wi-Fi: both DNS rows go red
    panel).
 2. Change the last Groceries amount from `22.00` to `90.00` and save. The total becomes $408.15 = 102 % of the
    budget.
-3. Within 30 s the card turns red: **critical**, a popup appears, an email draft opens, and the log gets
+3. Within 30 s the card turns red: **critical**, a popup appears, and the log gets
    `CRITICAL DOC: Groceries spend (monthly budget) at $408.15 (102% of $400; threshold 100%)`.
 4. Change it back to `22.00`. The card returns to *warning* once the total is under 95 % (the 5-point margin).
+
+The Groceries critical threshold has no `email_draft`; the next example has one.
 
 The document is re-read every cycle, and so are its settings: try changing `target` in the editor, no restart needed.
 
@@ -80,7 +82,9 @@ The document is re-read every cycle, and so are its settings: try changing `targ
 1. In the editor's **Document** panel, find **Monitor log size** (measure: *File size*). Set **Target (MB)** to
    `0.001` (about 1 KB) and save.
 2. Within 60 s its row turns red: the log is far above 95 % of the target. The log gets
-   `CRITICAL DOC: Monitor log size is … MB …` and an email draft opens (once per hour).
+   `CRITICAL DOC: Monitor log size is … MB …`. A **ticket preview** window opens (once per hour): a simulated
+   ServiceNow-style incident with its priority, severity and description. Click **Preview notification email**, then
+   **Open in email app** to get the draft in your mail client. The ticket stays in `logs/tickets/`.
 3. Set the target back to `50`. The row returns to OK.
 
 To watch another file, click **+ Add Monitor**, pick **File size** as the measure, and point **File** at it. A file

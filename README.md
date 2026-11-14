@@ -25,6 +25,8 @@ live web dashboard.
 - **Escalating actions without alert spam.** `log_to_file`, desktop `popup`, `email_draft` and `run_script`
   remediation. Hysteresis keeps a value hovering at a threshold to one incident, popups and emails fire once per
   incident, and an email cooldown caps drafts per alert; logging and remediation keep running while the problem lasts.
+  An email is never sent unattended: it first appears as a simulated ServiceNow-style incident ticket, where you
+  preview the message and then open it in your mail client.
 - **Live web console.** Merges the monitors' state files with a real-time process check, lets you pause and resume
   each monitor, and shows a runbook for each failing process. Light and dark themes, and a built-in demo guide
   ("How this demo works") for anyone trying it out.

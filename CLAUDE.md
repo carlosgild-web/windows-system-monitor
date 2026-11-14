@@ -55,6 +55,10 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
 - **`scripts/lib/MonitorActions.ps1`** (dot-sourced by every threshold monitor after `MonitorCommon.ps1`): the four
   action types, once. `Invoke-MonitorActions -Actions -Vars -GlobalCfg [-SuppressSpam]`, `Expand-Template`,
   `Write-MonitorLog` (rotating log writer). Never copy action code into a monitor; a test enforces this.
+  `email_draft` → `New-TicketPreview` writes `logs/tickets/INC00xxxxx.html` from `web/ticket.html` (data replaces the
+  `/*TICKET_DATA*/null` marker; keep the template self-contained, it opens from file://) and `Open-TicketWindow`
+  opens it in an Edge app window; the mailto link lives in the ticket. On any failure it falls back to opening
+  the mailto directly.
 - **`scripts/lib/Doctor.psm1`**: all health checks (`Test-DoctorEnvironment/Config/Paths/Runtime`, `Invoke-Doctor`).
   Used by `doctor.ps1`, the launcher preflight, and the Pester tests.
 - **`scripts/lib/DocumentReader.ps1`**: the document monitor's reader. `.csv` is read in-process (no Excel);
@@ -103,7 +107,8 @@ doctor afterwards. Full reference: `docs/configuration.md`.
 - **Incidents (CPU/memory/disk/network):** `Invoke-ThresholdAlerts` opens an incident after `sustain_sec` and closes it
   only after the value stays below `threshold - clear_margin` for `clear_sec` (optional per-threshold fields).
 - **Email cooldown:** one `email_draft` per `monitor|item|level` per `global.email_cooldown_min` (default 60),
-  persisted in `logs/alert_state.json` (shared by all monitor processes, guarded by a named mutex).
+  persisted in `logs/alert_state.json` (shared by all monitor processes, guarded by a named mutex). A save of
+  `$MonitorSettingsFile` after the last email resets it; tests point that variable at `$TestDrive`.
 - **Template variables:** `{timestamp}`, `{hostname}`, `{global.<field>}` everywhere; `{proc_name}`, `{proc_display}`
   (processes); `{current_value}`, `{percent}`, `{sustain_sec}` (CPU/memory); `{current_value}`, `{percent_used}`,
   `{free_gb}` (disk); `{host}`, `{port}`, `{current_value}`, `{latency_ms}` (network; `{latency_ms}` is the threshold);

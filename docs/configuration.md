@@ -191,10 +191,41 @@ slow (seconds per read) and needs Office. `file_size` never opens Excel, whateve
 |---|---|---|
 | `log_to_file` | Appends a line to `global.log_file`. | `level`, `message_template`¹ |
 | `popup` | Shows a Windows message box from a separate hidden process, so the monitor never blocks. | `title`, `message_template`¹ |
-| `email_draft` | Opens a pre-filled `mailto:` draft in the default mail client. | `to`, `subject_template`, `body_template` |
+| `email_draft` | Shows the alert as a simulated incident ticket (see below), where you preview the email and open it in your mail client. | `to`, `subject_template`, `body_template` |
 | `run_script` | Runs a PowerShell script with arguments. | `path`, `args[]` |
 
 ¹ Process actions use `instructions` instead of `message_template`.
+
+### The ticket preview (`email_draft`)
+
+An `email_draft` action doesn't open your mail client straight away. It first opens a small window with the alert
+presented as an incident in an ITSM tool such as ServiceNow: a number (`INC0010001`, ...), state, category,
+configuration item (the computer name), impact, urgency, priority, severity, assignment group, the description
+(your `body_template`) and an activity log. **It is a simulation**: no ticket is created anywhere and nothing is
+sent.
+
+1. **Ticket.** Review the incident. **Dismiss** closes it.
+2. **Preview notification email.** Shows From (`global.email_sender`), To, Subject and the body.
+3. **Open in email app.** Opens the pre-filled draft in your default mail client (a `mailto:` link), where you
+   send it or not. **Copy email text** copies it instead.
+
+How the fields are filled:
+
+| Field | From |
+|---|---|
+| Priority, impact, urgency, severity | The threshold level: `critical` → P1 (1 - Critical), `warning` → P3 (3 - Moderate) |
+| Category, subcategory, assignment group | The monitor (e.g. disk → Hardware / Storage / Server Operations); simulated |
+| Short description, description | The expanded `subject_template` and `body_template` |
+| Configuration item, opened | `{hostname}` and `{timestamp}` |
+
+Each ticket is saved as `logs/tickets/<number>.html` (open it again any time) from the template
+[`web/ticket.html`](../web/ticket.html); the next number is kept in `logs/tickets/next_number.txt`. The window is a
+Microsoft Edge app window (no tabs or address bar), or the default browser when Edge is missing. It is sized to fit
+the screen the mouse pointer is on (at most 900 × 880, centered), and its buttons stay visible while the ticket
+scrolls. If the preview can't be created, the email opens directly as before, so an alert is never lost.
+
+A ticket opens once per item and level per hour (the [email cooldown](#incidents-spam-guard-and-email-cooldown)
+below); saving the settings starts that hour over.
 
 ### Incidents, spam guard and email cooldown
 
@@ -219,10 +250,12 @@ per incident, and the log and remediation keep going.
 
 **3. Email cooldown.** Even across separate incidents, `email_draft` opens at most one draft per item and level
 within `global.email_cooldown_min` minutes (default 60, `0` turns it off). The last-sent times are saved in
-`logs/alert_state.json`, so restarting the monitors does not reset the cooldown. A skipped draft is logged:
+`logs/alert_state.json`, so restarting the monitors does not reset the cooldown. Saving `monitoring_settings.json`
+(in the editor or by hand) does: a changed threshold is a new test, so the next incident after a save opens a ticket
+again, while a value flapping on its own stays limited. A skipped draft is logged:
 
 ```
-[2026-11-13 10:42:00] INFO email_draft for performance|memory|critical skipped: one was opened less than 60 min ago (global.email_cooldown_min)
+[2026-11-13 10:42:00] INFO email_draft for performance|memory|critical skipped: one was opened less than 60 min ago (global.email_cooldown_min; saving the settings resets it)
 ```
 
 Processes don't need hysteresis (they are either running or not), but their `email_draft` actions share the same
