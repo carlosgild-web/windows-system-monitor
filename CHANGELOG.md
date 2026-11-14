@@ -20,6 +20,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The doctor checks every document, flags duplicate names, and only warns when a file_size file does not exist yet.
 - The Document card is first on the console.
 
+### Fixed
+- **Open Monitoring settings** no longer opens the editor of another copy of the project. When port 5757 is
+  already taken, the console asks the editor which copy it belongs to (new `GET /api/identity`: a hash of the
+  project folder plus the settings version, never the path). It opens the editor only when it matches, and
+  otherwise says what is on the port and to stop it. Before, a stale editor from another folder could show
+  different settings than the console.
+
 ## [1.6.0] - 2026-11-13
 
 A portfolio-ready release: a redesigned UI with a built-in demo guide, a default test environment that works

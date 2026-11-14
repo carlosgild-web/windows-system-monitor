@@ -743,6 +743,11 @@ async function openEditor(btn){
   try{
     const r=await fetch('/api/open-editor', {method:'POST'});
     const d=await r.json();
+    if(d.foreign_editor){          // port 5757 belongs to another copy of the project
+      if(tab) tab.close();
+      notice(d.error, 12000);
+      return;
+    }
     if(!d.ok) throw new Error(d.error||'Unknown error');
     if(tab) tab.location.href=d.url; else window.open(d.url, '_blank');
     if(!d.already_running) notice('Settings editor started. Watch the Settings Editor (demo) row under Network turn green.');

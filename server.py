@@ -5,6 +5,7 @@ Minimal local server for the Monitoring Settings Editor (stdlib only).
 Routes:
   GET  /                 -> monitoring_editor.html
   GET  /api/settings     -> reads  monitoring_settings.json
+  GET  /api/identity     -> which copy of the project this is (a hash, no path) + settings version
   POST /api/settings     -> writes monitoring_settings.json (JSON object only)
   POST /api/open-file    -> opens a project .xlsx file in its default app
 
@@ -13,6 +14,7 @@ the editor page itself (Host + Origin checks). Without this, any website open
 in the browser could rewrite the settings -- including the run_script actions
 -- or launch files through /api/open-file (CSRF / DNS rebinding).
 """
+import hashlib
 import json
 import os
 import sys
@@ -31,6 +33,24 @@ PORT = 5757
 BIND_HOST = os.environ.get("BIND_HOST", "localhost")
 MAX_BODY_BYTES = 2 * 1024 * 1024
 OPENABLE_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv"}
+
+
+def copy_id(base: Path) -> str:
+    """Identifies this copy of the project without revealing its path.
+
+    The console compares it with its own before opening the editor on port 5757, so a
+    second copy of the project elsewhere on the machine is never opened by mistake.
+    monitoring_console.py has the same function; a test keeps the two in step.
+    """
+    return hashlib.sha256(str(base).lower().encode("utf-8")).hexdigest()[:16]
+
+
+def identity() -> dict:
+    try:
+        version = json.loads(JSON_FILE.read_text(encoding="utf-8-sig")).get("_meta", {}).get("version", "?")
+    except (OSError, ValueError, AttributeError):
+        version = "?"
+    return {"app": "settings-editor", "copy_id": copy_id(BASE), "version": version}
 
 
 def is_same_origin(headers, port: int) -> bool:
@@ -111,6 +131,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(HTML_FILE.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/api/settings":
             self._send(JSON_FILE.read_bytes(), "application/json; charset=utf-8")
+        elif self.path == "/api/identity":
+            self._send(json.dumps(identity()).encode("utf-8"), "application/json; charset=utf-8")
         elif self.path.startswith(("/static/", "/web/static/")):
             target = resolve_static(self.path)
             if target is None:

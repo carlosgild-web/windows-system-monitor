@@ -15,11 +15,37 @@ import monitoring_console as mc  # noqa: E402
 
 
 class OpenEditorFunctionTests(unittest.TestCase):
+    def own_identity(self):
+        return {"app": "settings-editor", "copy_id": mc.copy_id(mc.BASE), "version": "1.7.0"}
+
     def test_does_not_start_a_second_editor(self):
         with mock.patch.object(mc, "_port_open", return_value=True), \
+             mock.patch.object(mc, "editor_identity", return_value=self.own_identity()), \
              mock.patch.object(mc.subprocess, "Popen") as popen:
             result = mc.open_editor()
         self.assertEqual(result, {"ok": True, "url": "http://localhost:5757", "already_running": True})
+        popen.assert_not_called()
+
+    def test_refuses_the_editor_of_another_copy(self):
+        other = dict(self.own_identity(), copy_id="0123456789abcdef", version="1.6.0")
+        with mock.patch.object(mc, "_port_open", return_value=True), \
+             mock.patch.object(mc, "editor_identity", return_value=other), \
+             mock.patch.object(mc.subprocess, "Popen") as popen:
+            result = mc.open_editor()
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["foreign_editor"])
+        self.assertIn("another copy", result["error"])
+        self.assertIn("v1.6.0", result["error"])
+        popen.assert_not_called()
+
+    def test_refuses_an_editor_without_an_identity(self):
+        # An editor from before /api/identity existed, or another program on the port.
+        with mock.patch.object(mc, "_port_open", return_value=True), \
+             mock.patch.object(mc, "editor_identity", return_value=None), \
+             mock.patch.object(mc.subprocess, "Popen") as popen:
+            result = mc.open_editor()
+        self.assertTrue(result["foreign_editor"])
+        self.assertIn("older settings editor", result["error"])
         popen.assert_not_called()
 
     def test_starts_the_editor_hidden_without_a_browser_and_waits_for_it(self):
@@ -81,6 +107,55 @@ class OpenEditorHttpTests(unittest.TestCase):
         with mock.patch.object(mc, "open_editor", return_value={"ok": True, "url": "x", "already_running": True}):
             status, body = self.post(f"http://localhost:{self.port}")
         self.assertEqual((status, body["ok"]), (200, True))
+
+
+class EditorIdentityTests(unittest.TestCase):
+    """GET /api/identity on the real editor server, read by the console."""
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT))
+        import server
+        self.server = server
+        self.httpd = HTTPServer(("localhost", 0), server.Handler)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+
+    def test_console_and_editor_compute_the_same_copy_id(self):
+        self.assertEqual(self.server.copy_id(self.server.BASE), mc.copy_id(mc.BASE))
+        self.assertEqual(mc.copy_id(Path("C:/A/Repo")), mc.copy_id(Path("c:/a/repo")))   # Windows paths ignore case
+        self.assertNotEqual(mc.copy_id(Path("C:/one/repo")), mc.copy_id(Path("C:/two/repo")))
+
+    def test_identity_names_the_copy_without_its_path(self):
+        port = self.httpd.server_address[1]
+        with mock.patch.object(mc, "EDITOR_HOST", "127.0.0.1"), mock.patch.object(mc, "EDITOR_PORT", port):
+            ident = mc.editor_identity()
+        self.assertEqual(ident["copy_id"], mc.copy_id(mc.BASE))
+        self.assertEqual(ident["app"], "settings-editor")
+        self.assertNotIn(str(ROOT).lower(), json.dumps(ident).lower())
+
+    def test_an_older_editor_or_nothing_has_no_identity(self):
+        from http.server import BaseHTTPRequestHandler
+
+        class OldEditor(BaseHTTPRequestHandler):       # answers, but has no /api/identity
+            def do_GET(self):
+                self.send_error(404)
+
+            def log_message(self, *args):
+                pass
+
+        old = HTTPServer(("localhost", 0), OldEditor)
+        threading.Thread(target=old.serve_forever, daemon=True).start()
+        self.addCleanup(old.server_close)
+        self.addCleanup(old.shutdown)
+        with mock.patch.object(mc, "EDITOR_HOST", "127.0.0.1"), \
+             mock.patch.object(mc, "EDITOR_PORT", old.server_address[1]):
+            self.assertIsNone(mc.editor_identity())
+        free = HTTPServer(("localhost", 0), OldEditor)       # grab a port, then free it: nothing listens
+        port = free.server_address[1]
+        free.server_close()
+        with mock.patch.object(mc, "EDITOR_HOST", "127.0.0.1"), mock.patch.object(mc, "EDITOR_PORT", port):
+            self.assertIsNone(mc.editor_identity(timeout=0.5))
 
 
 class ServerFlagTests(unittest.TestCase):

@@ -35,8 +35,10 @@ class OffWindowsConsoleTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_editor_is_probed_on_the_configured_host_and_never_spawned(self):
+        own = {"app": "settings-editor", "copy_id": mc.copy_id(mc.BASE), "version": "x"}
         with mock.patch.object(mc, "EDITOR_HOST", "editor"), \
              mock.patch.object(mc, "_port_open", return_value=True) as probe, \
+             mock.patch.object(mc, "editor_identity", return_value=own), \
              mock.patch.object(mc.subprocess, "Popen") as popen:
             self.assertEqual(mc.open_editor()["url"], "http://localhost:5757")
         self.assertEqual(probe.call_args.kwargs["host"], "editor")
