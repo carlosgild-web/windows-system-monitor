@@ -55,6 +55,10 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
 - **`scripts/lib/MonitorActions.ps1`** (dot-sourced by every threshold monitor after `MonitorCommon.ps1`): the four
   action types, once. `Invoke-MonitorActions -Actions -Vars -GlobalCfg [-SuppressSpam]`, `Expand-Template`,
   `Write-MonitorLog` (rotating log writer). Never copy action code into a monitor; a test enforces this.
+  `email_draft` → `New-TicketPreview` writes `logs/tickets/INC00xxxxx.html` from `web/ticket.html` (data replaces the
+  `/*TICKET_DATA*/null` marker; keep the template self-contained, it opens from file://) and `Open-TicketWindow`
+  opens it in an Edge app window; the mailto link lives in the ticket. On any failure it falls back to opening
+  the mailto directly.
 - **`scripts/lib/Doctor.psm1`**: all health checks (`Test-DoctorEnvironment/Config/Paths/Runtime`, `Invoke-Doctor`).
   Used by `doctor.ps1`, the launcher preflight, and the Pester tests.
 - **`scripts/lib/DocumentReader.ps1`**: the document monitor's reader. `.csv` is read in-process (no Excel);

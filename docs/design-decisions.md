@@ -117,7 +117,8 @@ The full explanation is in [docker.md](docker.md).
   documents avoid it entirely, which is why the default is a CSV. The Excel read runs in a short-lived child process
   (`scripts/lib/Read-XlsxTotal.ps1`), because Excel only exits when the process that drove it ends normally.
   Force-stopping a long-lived monitor that held Excel left orphaned hidden `EXCEL.EXE` processes.
-- **`email_draft` opens a `mailto:` draft** for a person to send. It doesn't deliver email unattended.
+- **`email_draft` never delivers email unattended.** It shows a simulated incident ticket first, and the person
+  decides whether to open the `mailto:` draft and send it. No real ticketing system is contacted.
 - **`run_script` handlers run synchronously** inside the monitor loop. Long tasks must be started detached.
 - **CPU sampling uses an English performance-counter path**, which fails on some localized Windows installs. The
   doctor detects this.

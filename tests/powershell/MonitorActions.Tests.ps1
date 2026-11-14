@@ -68,17 +68,35 @@ Describe 'Invoke-MonitorActions' {
         Remove-Item $log -ErrorAction SilentlyContinue
         Mock Start-Process { }
         Mock Show-MonitorPopup { }
+        Mock Open-TicketWindow { }
     }
 
     It 'runs every action on a first alert' {
         Invoke-MonitorActions -Actions $actions -Vars @{ host = 'srv1' } -GlobalCfg $g
         Should -Invoke Show-MonitorPopup -Times 1 -ParameterFilter { $Title -eq 'T srv1' -and $Message -eq 'M srv1' }
-        Should -Invoke Start-Process -Times 1
+        Should -Invoke Open-TicketWindow -Times 1
+        Should -Invoke Start-Process -Times 0          # the email waits in the ticket preview
         Get-Content $log | Should -Be 'LOG srv1'
     }
 
     It 'builds a mailto URI with every field escaped' {
+        Get-MailtoUri 'alerts@example.com' 'S srv1' 'B & ?' | Should -Be 'mailto:alerts@example.com?subject=S%20srv1&body=B%20%26%20%3F'
+        Get-MailtoUri 'a@x.com?cc=b@y.com' 's' 'b' | Should -BeLike 'mailto:a@x.com%3Fcc%3Db@y.com?subject=*'
+    }
+
+    It 'shows the email as a ticket preview that carries the mailto link' {
+        Invoke-MonitorActions -Actions $actions -Vars @{ host = 'srv1' } -GlobalCfg $g -AlertKey 'disk|C:\|critical'
+        Should -Invoke Open-TicketWindow -Times 1 -ParameterFilter { $Path -like '*\tickets\INC*.html' }
+        $html = Get-ChildItem (Join-Path $TestDrive 'actions\tickets') -Filter 'INC*.html' | Sort-Object Name | Select-Object -Last 1 | Get-Content -Raw
+        # ConvertTo-Json escapes the '&' between the fields, so check the parts on each side of it.
+        $html | Should -Match ([regex]::Escape('"mailto":"mailto:alerts@example.com?subject=S%20srv1'))
+        $html | Should -Match ([regex]::Escape('body=B%20%26%20%3F"'))
+    }
+
+    It 'opens the email directly when the ticket preview cannot be shown' {
+        Mock New-TicketPreview { throw 'no template' }
         Invoke-MonitorActions -Actions $actions -Vars @{ host = 'srv1' } -GlobalCfg $g
+        Should -Invoke Open-TicketWindow -Times 0
         Should -Invoke Start-Process -Times 1 -ParameterFilter {
             $FilePath -eq 'mailto:alerts@example.com?subject=S%20srv1&body=B%20%26%20%3F'
         }
@@ -87,6 +105,7 @@ Describe 'Invoke-MonitorActions' {
     It 'skips popup and email_draft on a repeat alert (spam guard) but still logs' {
         Invoke-MonitorActions -Actions $actions -Vars @{ host = 'srv1' } -GlobalCfg $g -SuppressSpam
         Should -Invoke Show-MonitorPopup -Times 0
+        Should -Invoke Open-TicketWindow -Times 0
         Should -Invoke Start-Process -Times 0
         Get-Content $log | Should -Be 'LOG srv1'
     }
@@ -113,7 +132,67 @@ Describe 'Invoke-MonitorActions' {
         Mock Show-MonitorPopup { throw 'no desktop' }
         { Invoke-MonitorActions -Actions $actions -Vars @{ host = 'srv1' } -GlobalCfg $g } | Should -Not -Throw
         Get-Content $log | Should -Be 'LOG srv1'
-        Should -Invoke Start-Process -Times 1
+        Should -Invoke Open-TicketWindow -Times 1
+    }
+}
+
+Describe 'Ticket preview' {
+    BeforeAll {
+        $g = New-GlobalCfg (Join-Path $TestDrive 'tk\monitor.log')
+        $g | Add-Member email_sender 'monitor@example.com'
+        function Get-TicketData ([string]$Path) {
+            $html = Get-Content $Path -Raw -Encoding UTF8
+            $m = [regex]::Match($html, 'const T = (\{.*?\});')
+            $m.Success | Should -BeTrue
+            return ($m.Groups[1].Value | ConvertFrom-Json)
+        }
+    }
+
+    It 'numbers tickets INC0010001, INC0010002, ...' {
+        $dir = Join-Path $TestDrive 'numbers'
+        Get-NextTicketNumber $dir | Should -Be 'INC0010001'
+        Get-NextTicketNumber $dir | Should -Be 'INC0010002'
+    }
+
+    It 'splits the alert key into monitor, item and level' -ForEach @(
+        @{ Key = 'performance|memory|critical'; Monitor = 'performance'; Item = 'memory'; Level = 'critical' }
+        @{ Key = 'document|Groceries|warning';  Monitor = 'document';    Item = 'Groceries'; Level = 'warning' }
+        @{ Key = 'process|notepad.exe';         Monitor = 'process';     Item = 'notepad.exe'; Level = 'critical' }
+        @{ Key = '';                            Monitor = 'monitoring';  Item = '';          Level = 'critical' }
+    ) {
+        $k = Split-AlertKey $Key
+        $k.Monitor | Should -Be $Monitor
+        $k.Item    | Should -Be $Item
+        $k.Level   | Should -Be $Level
+    }
+
+    It 'fills the template with the alert, and text cannot break out of the script block' {
+        $t = New-TicketPreview -AlertKey 'performance|memory|warning' -To 'a@example.com' -Subject 'RAM </script><b>x' `
+            -Body "line 1`nline 2" -Mailto 'mailto:a@example.com' -Vars @{ timestamp = '2026-11-14 10:00:00'; hostname = 'PC-01' } -GlobalCfg $g
+        $t.Path | Should -Exist
+        $html = Get-Content $t.Path -Raw -Encoding UTF8
+        $html | Should -Not -Match '/\*TICKET_DATA\*/null'
+        $html | Should -Not -Match '</script><b>'
+        $d = Get-TicketData $t.Path
+        $d.number   | Should -Be $t.Number
+        $d.level    | Should -Be 'warning'
+        $d.monitor  | Should -Be 'performance'
+        $d.item     | Should -Be 'memory'
+        $d.hostname | Should -Be 'PC-01'
+        $d.opened   | Should -Be '2026-11-14 10:00:00'
+        $d.subject  | Should -Be 'RAM </script><b>x'
+        $d.body     | Should -Be "line 1`nline 2"
+        $d.from     | Should -Be 'monitor@example.com'
+    }
+
+    It 'fails clearly when the template is missing' {
+        { New-TicketPreview -AlertKey 'disk|C:|critical' -To 'a@example.com' -Subject 's' -Body 'b' -Mailto 'mailto:a' `
+            -Vars @{} -GlobalCfg $g -Template (Join-Path $TestDrive 'nope.html') } | Should -Throw '*template not found*'
+    }
+
+    It 'keeps the shipped template marker in place' {
+        $template = Join-Path $PSScriptRoot '..\..\web\ticket.html'
+        (Get-Content $template -Raw -Encoding UTF8) | Should -Match ([regex]::Escape('const T = /*TICKET_DATA*/null;'))
     }
 }
 
@@ -237,12 +316,13 @@ Describe 'Invoke-ThresholdAlerts' {
         $t0  = Get-Date '2026-11-14 10:00:00'
         Mock Start-Process { }
         Mock Show-MonitorPopup { }
+        Mock Open-TicketWindow { }
     }
 
     It 'opens one email draft while RAM hovers around 95% for ten minutes' {
         $trackers = @{}
         Invoke-RamSeries (@(96) * 7 + @(94.8, 95.2, 94.9, 95.3) * 30) $trackers $t0 $g
-        Should -Invoke Start-Process -Times 1 -Exactly
+        Should -Invoke Open-TicketWindow -Times 1 -Exactly
         Should -Invoke Show-MonitorPopup -Times 1 -Exactly
         $trackers['critical'].Active | Should -BeTrue
     }
@@ -258,7 +338,7 @@ Describe 'Invoke-ThresholdAlerts' {
         # incident 1, a minute clearly back to normal, then incident 2
         Invoke-RamSeries (@(96) * 7 + @(70) * 12 + @(96) * 7) $trackers $t0 $g
         Should -Invoke Show-MonitorPopup -Times 2 -Exactly
-        Should -Invoke Start-Process -Times 1 -Exactly
+        Should -Invoke Open-TicketWindow -Times 1 -Exactly
         @(Get-Content $log | Where-Object { $_ -like '*email_draft for performance|memory|critical skipped*' }).Count | Should -Be 1
     }
 
@@ -266,6 +346,6 @@ Describe 'Invoke-ThresholdAlerts' {
         $g.email_cooldown_min = 0
         $trackers = @{}
         Invoke-RamSeries (@(96) * 7 + @(70) * 12 + @(96) * 7) $trackers $t0 $g
-        Should -Invoke Start-Process -Times 2 -Exactly
+        Should -Invoke Open-TicketWindow -Times 2 -Exactly
     }
 }

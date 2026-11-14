@@ -139,6 +139,11 @@ Describe 'Test-DoctorPaths' {
         (Test-DoctorPaths $cfg).Check | Should -Contain 'Excel COM registered'
     }
 
+    It 'finds the ticket preview template when an email_draft is configured' {
+        ($results = Test-DoctorPaths $cfg) | Out-Null
+        ($results | Where-Object Check -eq 'Ticket preview template').Status | Should -Be 'OK'
+    }
+
     It 'warns when a configured drive is not present' {
         $cfg.disk[0].drive = 'Q:\'
         $present = @(Get-CimInstance Win32_LogicalDisk | ForEach-Object DeviceID)

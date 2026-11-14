@@ -13,6 +13,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   yet counts as 0.
 - Two more sample documents: Eating out spend (budget CSV) and Monitor log size (`logs\monitor.log`).
 - The editor's Document section has **+ Add Monitor**, Remove and a Measure picker.
+- **Ticket preview for `email_draft`**: instead of opening the mail client straight away, the alert opens as a
+  simulated ServiceNow-style incident (number, state, category, configuration item, impact, urgency, priority,
+  severity, assignment group, description, activity). From there you preview the notification email and open it in
+  your mail client. Saved in `logs/tickets/`; template `web/ticket.html`.
 
 ### Changed
 - `document` is now a list, like `disk` and `network` (`_meta.version` 1.7.0). A v1.6 single object is still
@@ -26,6 +30,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   project folder plus the settings version, never the path). It opens the editor only when it matches, and
   otherwise says what is on the port and to stop it. Before, a stale editor from another folder could show
   different settings than the console.
+- The settings editor keeps cards and thresholds collapsed or expanded as you left them after saving, reloading,
+  adding a threshold or removing an item. Before, it expanded everything again.
 
 ## [1.6.0] - 2026-11-13
 

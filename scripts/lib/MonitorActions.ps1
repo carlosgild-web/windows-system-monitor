@@ -6,7 +6,10 @@
     - Expand-Template       : fills {var} and {global.<field>} placeholders.
     - Write-MonitorLog      : appends one line to global.log_file, rotating it at log_max_size_mb.
     - Invoke-MonitorActions : runs a threshold's action list (popup, log_to_file, email_draft,
-                              run_script). With -SuppressSpam (a repeat alert) only log_to_file
+                              run_script). email_draft first shows the alert as a simulated
+                              incident ticket (New-TicketPreview, web\ticket.html) where the user
+                              previews the email and opens it in their mail client.
+                              With -SuppressSpam (a repeat alert) only log_to_file
                               and run_script run. With -AlertKey, email_draft is limited to one
                               per key per global.email_cooldown_min (saved in logs\alert_state.json,
                               so restarts don't reset it).
@@ -79,18 +82,122 @@ function Invoke-LogAction ($Action, [hashtable]$Vars, $GlobalCfg) {
     Write-ActionTrace "[log] $message"
 }
 
-function Invoke-EmailAction ($Action, [hashtable]$Vars, $GlobalCfg) {
+function Get-MailtoUri ([string]$To, [string]$Subject, [string]$Body) {
+    # Escape the recipient too (a stray '?' or '&' must not start new mailto fields),
+    # but keep '@' and ',' readable for mail clients.
+    $recipient = [Uri]::EscapeDataString($To) -replace '%40', '@' -replace '%2C', ','
+    return 'mailto:' + $recipient +
+           '?subject=' + [Uri]::EscapeDataString($Subject) +
+           '&body='    + [Uri]::EscapeDataString($Body)
+}
+
+function Invoke-EmailAction ($Action, [hashtable]$Vars, $GlobalCfg, [string]$AlertKey) {
+    # The email is not opened straight away: the alert is first shown as a simulated
+    # incident ticket (web\ticket.html) where the user can preview the email and open it in
+    # their mail client. If the preview cannot be shown, the email opens directly as before.
     $to      = Expand-Template $Action.to               $Vars $GlobalCfg
     $subject = Expand-Template $Action.subject_template $Vars $GlobalCfg
     $body    = Expand-Template $Action.body_template    $Vars $GlobalCfg
-    # Escape the recipient too (a stray '?' or '&' must not start new mailto fields),
-    # but keep '@' and ',' readable for mail clients.
-    $recipient = [Uri]::EscapeDataString($to) -replace '%40', '@' -replace '%2C', ','
-    $mailto    = 'mailto:' + $recipient +
-                 '?subject=' + [Uri]::EscapeDataString($subject) +
-                 '&body='    + [Uri]::EscapeDataString($body)
-    Start-Process $mailto
-    Write-ActionTrace "[email_draft] to $to" Cyan
+    $mailto  = Get-MailtoUri $to $subject $body
+    try {
+        $ticket = New-TicketPreview -AlertKey $AlertKey -To $to -Subject $subject -Body $body -Mailto $mailto -Vars $Vars -GlobalCfg $GlobalCfg
+        Open-TicketWindow $ticket.Path
+        Write-ActionTrace "[email_draft] ticket $($ticket.Number) for $to" Cyan
+    }
+    catch {
+        Write-ActionTrace "[email_draft] ticket preview failed ($_); opening the email directly" Yellow
+        Start-Process $mailto
+    }
+}
+
+# ---- Ticket preview (email_draft) -------------------------------------------------
+function Get-TicketDir ($GlobalCfg) {
+    return Join-Path (Split-Path ([string]$GlobalCfg.log_file) -Parent) 'tickets'
+}
+
+function Get-NextTicketNumber ([string]$Dir) {
+    # INC0010001, INC0010002, ...: the counter is shared by every monitor process
+    # (logs\tickets\next_number.txt), so the read-increment-write runs under a named mutex.
+    $mutex = New-Object System.Threading.Mutex($false, 'Local\WindowsSystemMonitor.Tickets')
+    $owned = $false
+    try {
+        try { $owned = $mutex.WaitOne(3000) } catch [System.Threading.AbandonedMutexException] { $owned = $true }
+        if (-not (Test-Path $Dir)) { New-Item -ItemType Directory -Path $Dir -Force | Out-Null }
+        $file = Join-Path $Dir 'next_number.txt'
+        $n = 10001
+        if (Test-Path $file) {
+            $saved = 0
+            if ([int]::TryParse(([string](Get-Content $file -Raw)).Trim(), [ref]$saved) -and $saved -gt 0) { $n = $saved }
+        }
+        Set-Content -Path $file -Value ([string]($n + 1)) -Encoding ASCII
+        return 'INC{0:D7}' -f $n
+    }
+    finally {
+        if ($owned) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
+}
+
+function Split-AlertKey ([string]$AlertKey) {
+    # "performance|memory|critical" -> monitor, item, level. Process keys have no level
+    # ("process|notepad.exe"); emails are a critical action by convention, so critical.
+    $parts = @(([string]$AlertKey).Split('|') | Where-Object { $_ -ne '' })
+    $level = 'critical'
+    if ($parts.Count -ge 2 -and $parts[-1] -in @('warning', 'critical')) {
+        $level = $parts[-1]
+        $parts = @($parts[0..($parts.Count - 2)])
+    }
+    $monitor = if ($parts.Count -ge 1) { $parts[0] } else { 'monitoring' }
+    $item    = if ($parts.Count -ge 2) { ($parts[1..($parts.Count - 1)]) -join ' | ' } else { '' }
+    return @{ Monitor = $monitor; Item = $item; Level = $level }
+}
+
+function New-TicketPreview {
+    # Writes logs\tickets\<number>.html: web\ticket.html with this alert's data in place of
+    # the /*TICKET_DATA*/null marker. Returns @{ Number; Path }.
+    param([string]$AlertKey, [string]$To, [string]$Subject, [string]$Body, [string]$Mailto,
+          [hashtable]$Vars, $GlobalCfg, [string]$Template = (Join-Path $MonitorProjectRoot 'web\ticket.html'))
+    if (-not (Test-Path $Template)) { throw "ticket template not found: $Template" }
+    $dir    = Get-TicketDir $GlobalCfg
+    $number = Get-NextTicketNumber $dir
+    $key    = Split-AlertKey $AlertKey
+    $opened = if ($Vars -and $Vars.timestamp) { [string]$Vars.timestamp } else { (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') }
+    $hostName = if ($Vars -and $Vars.hostname) { [string]$Vars.hostname } else { [string]$env:COMPUTERNAME }
+    $data = [ordered]@{
+        number   = $number
+        opened   = $opened
+        level    = $key.Level
+        monitor  = $key.Monitor
+        item     = $key.Item
+        hostname = $hostName
+        to       = $To
+        from     = [string]$GlobalCfg.email_sender
+        subject  = $Subject
+        body     = $Body
+        mailto   = $Mailto
+    }
+    # '<' and '>' never appear unescaped, so text such as "</script>" in a template cannot end the script block.
+    $json = (ConvertTo-Json -InputObject $data -Compress -Depth 3).Replace('<', '<').Replace('>', '>')
+    $html = Get-Content $Template -Raw -Encoding UTF8
+    if (-not $html.Contains('/*TICKET_DATA*/null')) { throw 'ticket template has no /*TICKET_DATA*/null marker' }
+    $path = Join-Path $dir "$number.html"
+    [System.IO.File]::WriteAllText($path, $html.Replace('/*TICKET_DATA*/null', $json), (New-Object System.Text.UTF8Encoding $false))
+    return @{ Number = $number; Path = $path }
+}
+
+function Open-TicketWindow ([string]$Path) {
+    # A small window without tabs or an address bar (Edge app mode, on every Windows 10/11),
+    # falling back to the default browser.
+    $uri  = ([Uri](Resolve-Path -LiteralPath $Path).ProviderPath).AbsoluteUri
+    $edge = @(
+        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
+        (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe')
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if ($edge) {
+        Start-Process -FilePath $edge -ArgumentList "--app=$uri", '--window-size=900,880'
+    } else {
+        Start-Process -FilePath $Path
+    }
 }
 
 function Invoke-ScriptAction ($Action, [hashtable]$Vars, $GlobalCfg) {
@@ -163,7 +270,7 @@ function Invoke-MonitorActions {
                 'log_to_file' { Invoke-LogAction    $action $Vars $GlobalCfg }
                 'email_draft' {
                     if (-not $AlertKey -or (Request-EmailSlot $AlertKey $GlobalCfg)) {
-                        Invoke-EmailAction $action $Vars $GlobalCfg
+                        Invoke-EmailAction $action $Vars $GlobalCfg $AlertKey
                     } else {
                         $msg = '[{0}] INFO email_draft for {1} skipped: one was opened less than {2} min ago (global.email_cooldown_min)' -f
                                (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $AlertKey, (Get-EmailCooldownMinutes $GlobalCfg)

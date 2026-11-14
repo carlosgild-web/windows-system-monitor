@@ -211,6 +211,48 @@ function tog(hdr){
   hdr.classList.toggle('open');
   hdr.nextElementSibling.classList.toggle('open');
   hdr.setAttribute('aria-expanded', hdr.classList.contains('open'));
+  const k=foldKey(hdr); if(k) FOLD[k]=hdr.classList.contains('open');
+}
+
+// ─── Remember what the user expanded or collapsed ────────────────────────────
+// Every render rebuilds the panels from S, which would reset each card and threshold
+// to its default. FOLD keeps the user's choice per item (keyed by its settings path,
+// e.g. "document.0" or "document.0.thresholds.1") and applyFold() puts it back after
+// each render (via updateBadges), so saving, reloading or adding a threshold leaves
+// collapsed cards collapsed. Items the user never toggled keep their default.
+const FOLD={};
+function foldKey(hdr){
+  const body=hdr.nextElementSibling;
+  const f=body&&body.querySelector('[data-p]');
+  if(!f) return null;
+  const p=f.dataset.p.split('.');
+  p.pop();                                   // "document.0.display_name" -> "document.0"
+  return p.join('.');
+}
+function applyFold(){
+  document.querySelectorAll('#content .ch, #content .th').forEach(h=>{
+    const k=foldKey(h);
+    if(!k||!(k in FOLD)) return;
+    h.classList.toggle('open', FOLD[k]);
+    h.nextElementSibling.classList.toggle('open', FOLD[k]);
+  });
+}
+// When an item is removed from (or inserted into) a list, the items after it change
+// index: move their remembered state with them, and forget the removed one.
+function foldShift(listPath, fromIdx, delta){
+  const pre=listPath+'.';
+  const moved={};
+  Object.keys(FOLD).forEach(k=>{
+    if(!k.startsWith(pre)) return;
+    const rest=k.slice(pre.length).split('.');
+    const i=+rest[0];
+    if(isNaN(i)||i<fromIdx) return;
+    if(delta<0&&i===fromIdx){ delete FOLD[k]; return; }
+    rest[0]=String(i+delta);
+    moved[pre+rest.join('.')]=FOLD[k];
+    delete FOLD[k];
+  });
+  Object.assign(FOLD, moved);
 }
 
 // ─── Accessibility pass (runs after every render) ────────────────────────────
@@ -219,6 +261,7 @@ function tog(hdr){
 // focusable buttons that open with Enter or Space.
 let _fieldId=0;
 function a11yPass(){
+  applyFold();
   document.querySelectorAll('#content .fg > label').forEach(l=>{
     if(l.htmlFor) return;
     const ctl=l.parentElement.querySelector('input,select,textarea');
@@ -416,6 +459,7 @@ function addThresh(arrPath,sec,kind){
 }
 function rmThresh(arrPath,idx,sec){
   gp(arrPath).splice(idx,1);
+  foldShift(arrPath, idx, -1);
   rerender(sec); markDirty();
 }
 function netThreshKind(tp,val,sec){
@@ -511,6 +555,7 @@ function addProcess(){
   const newOpen=new Set([0]);
   prevOpen.forEach(i=>newOpen.add(i+1));
   S.processes.unshift({name:'',display_name:'New Process',required:false,check_interval_sec:30,actions:{on_not_running:[]}});
+  foldShift('processes', 0, +1);
   renderProcesses(newOpen); markDirty();
 }
 function rmProcess(i){
@@ -519,6 +564,7 @@ function rmProcess(i){
     const newOpen=new Set();
     prevOpen.forEach(idx=>{ if(idx<i) newOpen.add(idx); else if(idx>i) newOpen.add(idx-1); });
     S.processes.splice(i,1);
+    foldShift('processes', i, -1);
     renderProcesses(newOpen); markDirty();
   }
 }
@@ -574,7 +620,7 @@ function addDisk(){
   S.disk.push({drive:'',display_name:'New Drive',check_interval_sec:60,thresholds:[]});
   renderDisk(); markDirty();
 }
-function rmDisk(i){ if(confirm('Remove this drive?')){ S.disk.splice(i,1); renderDisk(); markDirty(); } }
+function rmDisk(i){ if(confirm('Remove this drive?')){ S.disk.splice(i,1); foldShift('disk', i, -1); renderDisk(); markDirty(); } }
 
 function renderNetwork(){
   document.getElementById('panel-network').innerHTML=`
@@ -617,7 +663,7 @@ function addNetwork(){
   S.network.push({name:'',host:'',port:80,protocol:'tcp',timeout_sec:5,check_interval_sec:30,thresholds:[]});
   renderNetwork(); markDirty();
 }
-function rmNetwork(i){ if(confirm('Remove this monitor?')){ S.network.splice(i,1); renderNetwork(); markDirty(); } }
+function rmNetwork(i){ if(confirm('Remove this monitor?')){ S.network.splice(i,1); foldShift('network', i, -1); renderNetwork(); markDirty(); } }
 
 const DOC_DEFAULT={display_name:'New document',measure:'sum',path:'sample_data\\monthly_budget_sample.csv',
   filter_column:'Category',filter_value:'Groceries',value_column:'Amount',target:400,unit:'$',check_interval_sec:30,thresholds:[]};
@@ -687,7 +733,7 @@ function addDocument(){
   S.document.push(doc);
   renderDocument(); markDirty();
 }
-function rmDocument(i){ if(confirm('Remove this document monitor?')){ S.document.splice(i,1); renderDocument(); markDirty(); } }
+function rmDocument(i){ if(confirm('Remove this document monitor?')){ S.document.splice(i,1); foldShift('document', i, -1); renderDocument(); markDirty(); } }
 function setDocMeasure(i,measure){
   const doc=S.document[i];
   doc.measure=measure;
