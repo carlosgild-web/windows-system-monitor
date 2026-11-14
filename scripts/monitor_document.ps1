@@ -1,78 +1,115 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Document Monitor -- watches one number in a CSV or Excel file (the "document" section).
+    Document Monitor -- watches one number per entry of the "document" list: a total in a
+    CSV or Excel file, or a file's size.
 .DESCRIPTION
-    Every check_interval_sec it sums value_column over the rows where filter_column equals
-    filter_value, compares the total with target, and fires the thresholds' actions when the
-    total goes above (or below) a percent of the target. The same hysteresis, spam guard and
-    email cooldown as the other monitors apply. Writes logs\document_state.json every cycle.
+    Each entry is checked every check_interval_sec. measure "sum" (the default) sums
+    value_column over the rows where filter_column equals filter_value; measure "file_size"
+    reads the file's size in size_unit. The value is compared with target, and the
+    thresholds' actions fire when it goes above (or below) a percent of the target. The same
+    hysteresis, spam guard and email cooldown as the other monitors apply. Writes
+    logs\document_state.json whenever an entry is checked.
 
-    Settings are re-read on every cycle, so editing the target or the file path takes effect
-    without a restart.
+    Settings are re-read on every pass, so adding a document or editing a target or a file
+    path takes effect without a restart.
 #>
 $ErrorActionPreference = 'Continue'
 
 . (Join-Path $PSScriptRoot 'lib\MonitorCommon.ps1')    # Get-MonitorSettings, Resolve-ProjectPath
 . (Join-Path $PSScriptRoot 'lib\MonitorActions.ps1')   # Invoke-ThresholdAlerts and the actions
-. (Join-Path $PSScriptRoot 'lib\DocumentReader.ps1')   # Get-DocumentTotal
+. (Join-Path $PSScriptRoot 'lib\DocumentReader.ps1')   # Get-DocumentList, Get-DocumentTotal, Get-DocumentChecks
 
-$trackers  = @{}                  # level -> incident tracker, kept across cycles
-$hostname  = $env:COMPUTERNAME
+$docState = @{}                   # display_name -> @{ LastChecked; Trackers; Row }, kept across passes
+$hostname = $env:COMPUTERNAME
 
-function Write-DocumentStateFile ($Cfg, $State) {
+function Write-DocumentStateFile ($Cfg, $Rows) {
     $stateFile = Join-Path (Split-Path $Cfg.global.log_file) 'document_state.json'
+    $payload = [ordered]@{
+        updated     = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+        monitor_pid = $PID
+        documents   = @($Rows)
+    }
     try {
         $dir = Split-Path $stateFile -Parent
         if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-        $State | ConvertTo-Json -Depth 4 | Set-Content -Path $stateFile -Encoding UTF8
+        ConvertTo-Json -InputObject $payload -Depth 5 | Set-Content -Path $stateFile -Encoding UTF8
     } catch {}
 }
 
-while ($true) {
-    $checkSec = 60
-    try {
-        $cfg = Get-MonitorSettings
-        $doc = $cfg.document
-        $now = Get-Date
-        if ($null -ne $doc -and $doc.check_interval_sec -gt 0) { $checkSec = [int]$doc.check_interval_sec }
-
-        $state = [ordered]@{
-            updated           = $now.ToString('yyyy-MM-dd HH:mm:ss')
-            monitor_pid       = $PID
-            display_name      = if ($doc) { [string]$doc.display_name } else { 'Document' }
-            path              = if ($doc) { [string]$doc.path } else { $null }
-            total             = $null
-            target            = $null
-            unit              = if ($doc -and $null -ne $doc.unit) { [string]$doc.unit } else { '' }
-            percent_of_target = $null
-            current_level     = 'unknown'
-            error             = $null
+function Measure-Document ($Doc, [datetime]$Now, $Ds, $GlobalCfg) {
+    $name = if ($Doc.display_name) { [string]$Doc.display_name } else { 'Document' }
+    $row = [ordered]@{
+        display_name      = $name
+        path              = [string]$Doc.path
+        measure           = Get-DocumentMeasure $Doc
+        total             = $null
+        target            = $null
+        unit              = Get-DocumentUnit $Doc
+        percent_of_target = $null
+        current_level     = 'unknown'
+        error             = $null
+        note              = $null
+        last_check        = $Now.ToString('yyyy-MM-dd HH:mm:ss')
+    }
+    $result = Get-DocumentTotal $Doc
+    $row.target = [double]$Doc.target
+    $row.error  = $result.error
+    $row.note   = $result.note
+    if ($null -ne $result.total) {
+        $total = [double]$result.total
+        $eval  = Get-DocumentChecks -Doc $Doc -Total $total -Now $Now -Hostname $hostname
+        $row.total             = $total
+        $row.percent_of_target = $eval.Percent
+        $row.current_level     = $eval.Level
+        if ($eval.Checks.Count -gt 0) {
+            $null = Invoke-ThresholdAlerts -Checks $eval.Checks -Trackers $Ds.Trackers -Now $Now `
+                -GlobalCfg $GlobalCfg -KeyPrefix "document|$name"
         }
+    }
+    return $row
+}
 
-        if ($null -eq $doc) {
-            $state.error = 'No "document" section in monitoring_settings.json'
-        } else {
-            $result = Get-DocumentTotal $doc
-            $target = [double]$doc.target
-            $state.target = $target
-            $state.error  = $result.error
-            if ($null -ne $result.total) {
-                $total = [double]$result.total
-                $eval  = Get-DocumentChecks -Doc $doc -Total $total -Now $now -Hostname $hostname
-                $state.total             = $total
-                $state.percent_of_target = $eval.Percent
-                $state.current_level     = $eval.Level
-                if ($eval.Checks.Count -gt 0) {
-                    $null = Invoke-ThresholdAlerts -Checks $eval.Checks -Trackers $trackers -Now $now `
-                        -GlobalCfg $cfg.global -KeyPrefix "document|$($state.display_name)"
+while ($true) {
+    try {
+        $cfg     = Get-MonitorSettings
+        $now     = Get-Date
+        $changed = $false
+        $rows    = [System.Collections.Generic.List[object]]::new()
+
+        foreach ($doc in (Get-DocumentList $cfg)) {
+            try {
+                $name = if ($doc.display_name) { [string]$doc.display_name } else { 'Document' }
+                if (-not $docState.ContainsKey($name)) {
+                    $docState[$name] = @{ LastChecked = $null; Trackers = @{}; Row = $null }
                 }
+                $ds       = $docState[$name]
+                $interval = if ($doc.check_interval_sec -gt 0) { [int]$doc.check_interval_sec } else { 60 }
+
+                if ($ds.LastChecked -and ($now - $ds.LastChecked).TotalSeconds -lt $interval -and $ds.Row) {
+                    $rows.Add($ds.Row)             # not due yet: keep the last result
+                    continue
+                }
+                $ds.LastChecked = $now
+                $ds.Row         = Measure-Document $doc $now $ds $cfg.global
+                $rows.Add($ds.Row)
+                $changed = $true
+            }
+            catch {
+                # one bad entry must not stop the others
             }
         }
-        Write-DocumentStateFile $cfg $state
+
+        # Forget documents that were removed from the settings, and write the file when
+        # something was checked or the list changed.
+        $names = @($rows | ForEach-Object { $_.display_name })
+        foreach ($k in @($docState.Keys)) {
+            if ($names -notcontains $k) { $docState.Remove($k); $changed = $true }
+        }
+        if ($changed -or $rows.Count -eq 0) { Write-DocumentStateFile $cfg $rows }
     }
     catch {
-        # keep the loop alive; the next cycle retries
+        # keep the loop alive; the next pass retries
     }
-    Start-Sleep -Seconds $checkSec
+    Start-Sleep -Seconds 1
 }

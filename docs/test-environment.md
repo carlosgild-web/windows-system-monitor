@@ -22,6 +22,8 @@ Start everything with `start_monitoring.bat`, open the console at <http://localh
 | Network | Monitoring console `localhost:5758` | Online while the console runs | Close the console |
 | Network | Settings editor `localhost:5757` | **Warning until you open the editor** | **Open Monitoring settings** in the console |
 | Document | `sample_data/monthly_budget_sample.csv`: Groceries vs a $400 budget | **Warning** ($340.15 = 85 %) | Edit an amount in the CSV |
+| Document | Same CSV: Eating out vs a $60 budget | OK ($28.50 = 47.5 %) | Add an Eating out row to the CSV |
+| Document | Size of `logs/monitor.log` vs 50 MB (the log rotation size) | OK (a few KB) | Lower its target in the editor |
 
 So a fresh start shows a few deliberate non-green rows: Notepad (not running), the settings editor (closed) and the
 budget (at 85 %). Each one can be turned green.
@@ -72,6 +74,27 @@ To see a **critical** network alert, disconnect from Wi-Fi: both DNS rows go red
 4. Change it back to `22.00`. The card returns to *warning* once the total is under 95 % (the 5-point margin).
 
 The document is re-read every cycle, and so are its settings: try changing `target` in the editor, no restart needed.
+
+### Document: the monitor log size
+
+1. In the editor's **Document** panel, find **Monitor log size** (measure: *File size*). Set **Target (MB)** to
+   `0.001` (about 1 KB) and save.
+2. Within 60 s its row turns red: the log is far above 95 % of the target. The log gets
+   `CRITICAL DOC: Monitor log size is … MB …` and an email draft opens (once per hour).
+3. Set the target back to `50`. The row returns to OK.
+
+To watch another file, click **+ Add Monitor**, pick **File size** as the measure, and point **File** at it. A file
+that does not exist yet counts as 0 MB until it is created.
+
+### Stop and start all monitors from the banner
+
+1. Click **Stop monitoring** in the console's demo banner and confirm. All five monitors stop; the console and the
+   settings editor keep running. The cards turn *Paused* as their state files go stale (up to a couple of minutes).
+2. Run `doctor.bat`: it reports the monitors as not running.
+3. Click **Start monitoring**. The monitors start again and the cards come back within one check interval.
+
+The buttons only act on this copy of the project: monitors started from another folder on the same machine are
+left alone.
 
 ## Make it your own
 

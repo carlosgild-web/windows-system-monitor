@@ -49,12 +49,12 @@ docker/simulator.py ──writes──► logs/*_state.json ◄──reads──
   | Disk | Slowly drifting usage around 75–80 % |
   | Network, public hosts | Simulated latency |
   | Network, `localhost` targets | **Real** TCP checks against the console and editor in the container |
-  | Document | **Real**: it reads the CSV and applies its above/below thresholds |
+  | Document | **Real**: it reads the CSV (or the file's size) and applies its above/below thresholds |
 
   Levels are computed from the thresholds in `monitoring_settings.json`, which the simulator re-reads every cycle:
   change a threshold in the editor and the console follows a few seconds later.
-- **Off Windows, the console is read-only.** There are no Pause/Resume buttons, because there are no PowerShell
-  processes to stop. The banner says the data is simulated, and opening a spreadsheet from the editor explains why it
+- **Off Windows, the console is read-only.** There are no Pause/Resume or Start/Stop monitoring buttons, because there
+  are no PowerShell processes to stop. The banner says the data is simulated, and opening a spreadsheet from the editor explains why it
   can't.
 
 ## Security notes
@@ -71,8 +71,8 @@ The `Docker demo` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.ym
 and runs `docker/smoke_test.py`. The smoke test checks that:
 
 - every monitor is reported live;
-- the document total comes from the real CSV;
-- the console is read-only and in demo mode;
+- the document totals come from the real CSV, and the file-size document is reported;
+- the console is read-only and in demo mode, and refuses the banner's Stop monitoring;
 - the editor row is online;
 - both pages and their assets load;
 - the editor and console read the same settings.

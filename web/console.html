@@ -164,6 +164,7 @@ body { min-height: 100vh; display: flex; flex-direction: column; }
 .guide .gbtn.solid { background: var(--g-text); border-color: var(--g-text); color: var(--g-bg); }
 .guide .gbtn.solid:hover { background: #fff; }
 .guide .gbtn:disabled { opacity: .7; cursor: progress; }
+.guide .gbtn[hidden] { display: none; }
 .guide .gclose { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--g-muted); cursor: pointer; }
 .guide .gclose:hover { background: var(--g-hover); color: var(--g-text); }
 .guide-pill { position: fixed; left: 16px; bottom: 56px; z-index: 60; display: none; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px dashed var(--g-edge); background: var(--g-bg); color: var(--g-text); font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow-lg); }
@@ -242,6 +243,8 @@ body.guide-hidden .guide-pill { display: inline-flex; }
       <div class="guide-actions">
         <button class="gbtn" onclick="openGuide()">How this demo works</button>
         <button class="gbtn solid" id="btn-open-editor" onclick="openEditor(this)"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-sliders"/></svg>Open Monitoring settings</button>
+        <button class="gbtn" id="btn-mon-start" hidden onclick="ctrlAll('start')"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-play"/></svg>Start monitoring</button>
+        <button class="gbtn" id="btn-mon-stop" hidden onclick="ctrlAll('stop')"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-pause"/></svg>Stop monitoring</button>
       </div>
     </div>
     <button class="gclose" onclick="setGuide('pill')" title="Hide the demo guide" aria-label="Hide the demo guide"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-close"/></svg></button>
@@ -280,6 +283,14 @@ body.guide-hidden .guide-pill { display: inline-flex; }
   </section>
 
   <div class="board">
+    <section class="card mon-card" id="card-document">
+      <div class="card-head" id="head-document">
+        <div class="card-title"><span class="card-ico"><svg class="icon icon-lg"><use href="/static/icons.svg#i-document"/></svg></span>
+          <div><div class="card-name">Document</div><div class="card-meta" id="meta-document">&nbsp;</div></div></div>
+        <div class="card-ctrl" id="ctrl-document"></div>
+      </div>
+      <div class="card-body" id="doc-list"><div class="empty">Loading&hellip;</div></div>
+    </section>
     <section class="card mon-card" id="card-process">
       <div class="card-head" id="head-process">
         <div class="card-title"><span class="card-ico"><svg class="icon icon-lg"><use href="/static/icons.svg#i-process"/></svg></span>
@@ -311,14 +322,6 @@ body.guide-hidden .guide-pill { display: inline-flex; }
         <div class="card-ctrl" id="ctrl-disk"></div>
       </div>
       <div class="card-body" id="disk-list"><div class="empty">Loading&hellip;</div></div>
-    </section>
-    <section class="card mon-card" id="card-document">
-      <div class="card-head" id="head-document">
-        <div class="card-title"><span class="card-ico"><svg class="icon icon-lg"><use href="/static/icons.svg#i-document"/></svg></span>
-          <div><div class="card-name">Document</div><div class="card-meta" id="meta-document">&nbsp;</div></div></div>
-        <div class="card-ctrl" id="ctrl-document"></div>
-      </div>
-      <div class="card-body" id="doc-list"><div class="empty">Loading&hellip;</div></div>
     </section>
   </div>
 </main>
@@ -373,7 +376,7 @@ body.guide-hidden .guide-pill { display: inline-flex; }
       <section>
         <h3>What this is</h3>
         <p>A monitoring and auto-remediation toolkit for Windows, driven by one JSON file. Five PowerShell monitors
-          (processes, CPU and memory, disks, network, and a number in a CSV or Excel file) check this machine on their
+          (processes, CPU and memory, disks, network, and documents: a total in a CSV or Excel file, or a file's size) check this machine on their
           own schedules. When a threshold is crossed they act: a log line, a desktop popup, an email draft, or a
           remediation script.</p>
       </section>
@@ -398,6 +401,8 @@ body.guide-hidden .guide-pill { display: inline-flex; }
           <li>Click <b>Open Monitoring settings</b>. The <i>Settings Editor (demo)</i> row under Network turns green within 30 seconds.</li>
           <li>In <code>sample_data/monthly_budget_sample.csv</code>, change the last Groceries amount from 22.00 to 90.00 and save. The budget turns critical.</li>
           <li>Pause a monitor here, then run <code>doctor.bat</code>. It reports that monitor as not running.</li>
+          <li>Click <b>Stop monitoring</b> in this banner. Every card turns Paused, and <b>Start monitoring</b> brings them all back.</li>
+          <li>Watch <b>Monitor log size</b> under Document: it reads the size of <code>logs/monitor.log</code>, not its contents.</li>
           <li>Hover or tab to an <b>&#9432;</b> icon to see that item's thresholds and actions.</li>
         </ul>
       </section>
@@ -511,12 +516,19 @@ function _ttProc(p){
     `<div class="tt-cur">When it stops: <span class="tt-acts">${_actIcons(p.actions)||'&ndash;'}</span></div>${instr}`;
 }
 function _docRule(t){ return `${t.condition==='below'?'Below':'Above'} <b>${t.percent_of_target}%</b> of target`; }
+// A document value with its unit: "$340.15" for a total, "12.34 MB" for a file size.
+function docVal(ds, v, digits){
+  const n=Number(v||0).toFixed(digits==null?2:digits), u=esc(ds.unit||'');
+  return ds.measure==='file_size'?`${n}<span class="muted" style="font-size:12px;font-weight:600"> ${u}</span>`:`${u}${n}`;
+}
 function _ttDoc(ds, cfg){
-  const c=cfg||{}, u=ds.unit||'';
+  const c=cfg||{};
   const cur=ds.error?`<span style="color:var(--crit-fill)">Error: ${esc(ds.error)}</span>`
-    :`Current: <b>${esc(u)}${Number(ds.total||0).toFixed(2)}</b> (${ds.percent_of_target}% of ${esc(u)}${ds.target})`;
+    :`Current: <b>${docVal(ds, ds.total)}</b> (${ds.percent_of_target}% of ${docVal(ds, ds.target, 0)})${ds.note?'<br>'+esc(ds.note):''}`;
+  const what=ds.measure==='file_size'?'File size'
+    :`Sum of ${esc(c.value_column||'')} where ${esc(c.filter_column||'')} = ${esc(c.filter_value||'')}`;
   return `<div class="tt-title">${esc(ds.display_name||'Document')}</div>`+
-    `<div class="tt-meta">${esc(c.path||ds.path||'')}<br>Sum of ${esc(c.value_column||'')} where ${esc(c.filter_column||'')} = ${esc(c.filter_value||'')} &middot; every ${c.check_interval_sec||60}s</div>`+
+    `<div class="tt-meta">${esc(c.path||ds.path||'')}<br>${what} &middot; every ${c.check_interval_sec||60}s</div>`+
     `<div class="tt-cur">${cur}</div><div class="tt-hr"></div>`+_ttThresh(c.thresholds,'doc');
 }
 
@@ -542,6 +554,7 @@ function render(d){
       'with simulated data: the real monitors need Windows. The console and the settings editor are the real ones.';
   }
   document.getElementById('btn-open-editor').hidden=!caps.open_editor;
+  renderAllCtrl(caps.control, liveCount, Object.keys(monIds).length);
 
   // card header: pause / resume
   Object.keys(monIds).forEach(key=>{
@@ -632,26 +645,33 @@ function render(d){
     return row(lvl, m.name, ttid, sub, metric, badge(lvl));
   }).join('');
 
-  // document (CSV / Excel): the level comes from the monitor's thresholds
+  // documents (a total in a CSV / Excel file, or a file's size): levels come from the monitor's thresholds
   const dl=document.getElementById('doc-list');
-  const docCfg=cfg.document||{};
-  document.getElementById('meta-document').textContent=docCfg.path?docCfg.path.split(/[\\/]/).pop():'';
-  if(!d.document) dl.innerHTML=empty('No data yet. Start <code>monitor_document.ps1</code>.', 'nodata');
+  const docs=d.documents||[], docCfgs=cfg.document||[];
+  document.getElementById('meta-document').textContent=docs.length?`${docs.length} document${docs.length>1?'s':''}`:'';
+  if(!docs.length) dl.innerHTML=empty('No data yet. Start <code>monitor_document.ps1</code>.', 'nodata');
   else {
-    const ds=d.document, ttid='doc-0'; _ttCache[ttid]=_ttDoc(ds,docCfg);
-    if(ds.error){
-      if(mons.document) note('critical', ds.display_name||'Document');
-      dl.innerHTML=row('critical', ds.display_name||'Document', ttid, esc(ds.error), '', badge('critical','Data error'), 'err')+
-        `<div class="empty">${stateSlot('error','alert')}<span>Check the file path and the column names in the settings editor's Document panel.</span></div>`;
-    } else {
-      const u=ds.unit||'', lvl=lvlOf(ds.current_level);
-      if(mons.document) note(lvl, ds.display_name||'Document');
-      const total=Number(ds.total||0), pct=Number(ds.percent_of_target||0);
+    let anyErr=false;
+    dl.innerHTML=docs.map((ds,i)=>{
+      const name=ds.display_name||'Document';
+      const c=docCfgs.find(x=>(x.display_name||'Document')===name)||{};
+      const ttid=`doc-${i}`; _ttCache[ttid]=_ttDoc(ds,c);
+      if(ds.error){
+        anyErr=true;
+        if(mons.document) note('critical', name);
+        return row('critical', name, ttid, esc(ds.error), '', badge('critical','Data error'), 'err');
+      }
+      const lvl=lvlOf(ds.current_level); if(mons.document) note(lvl, name);
+      const pct=Number(ds.percent_of_target||0);
       // the meter shows 0-100 % of the target; ticks mark the thresholds
-      const ticks=(docCfg.thresholds||[]).map(t=>({at:t.percent_of_target, level:t.level}));
-      const metric=`<div class="metric-val">${esc(u)}${total.toFixed(2)}</div>${meter(pct,lvl,ticks,'Total '+pct+'% of target')}<div class="metric-note">${pct}% of ${esc(u)}${Number(ds.target||0).toFixed(0)}</div>`;
-      dl.innerHTML=row(lvl, ds.display_name||'Document', ttid, 'updated '+esc((ds.updated||'').slice(11)), metric, badge(lvl));
-    }
+      const ticks=(c.thresholds||[]).map(t=>({at:t.percent_of_target, level:t.level}));
+      const metric=`<div class="metric-val">${docVal(ds, ds.total)}</div>${meter(pct,lvl,ticks,name+' '+pct+'% of target')}<div class="metric-note">${pct}% of ${docVal(ds, ds.target, 0)}</div>`;
+      const what=ds.measure==='file_size'?'file size':'total';
+      const sub=ds.note?esc(ds.note):`${what} &middot; checked ${esc((ds.last_check||ds.updated||'').slice(11)||'–')}`;
+      return row(lvl, name, ttid, sub, metric, badge(lvl));
+    }).join('');
+    if(anyErr) dl.insertAdjacentHTML('beforeend',
+      `<div class="empty">${stateSlot('error','alert')}<span>Check the file path and the column names in the settings editor's Document panel.</span></div>`);
   }
 
   // overview tiles
@@ -732,6 +752,49 @@ async function openEditor(btn){
   } finally {
     btn.disabled=false; btn.innerHTML=label;
   }
+}
+
+// Banner: Start / Stop monitoring (all five monitors; the console and the editor stay up).
+// A stopped monitor only shows as paused once its state file goes stale, so the button stays
+// busy until the live count reaches the goal (or ALL_WAIT_MS passes).
+const ALL_WAIT_MS=150000;
+let _allPending=null;          // {action, since}
+function renderAllCtrl(canControl, live, total){
+  const start=document.getElementById('btn-mon-start'), stop=document.getElementById('btn-mon-stop');
+  if(!canControl){ start.hidden=stop.hidden=true; return; }
+  if(_allPending){
+    const done=_allPending.action==='stop'?live===0:live===total;
+    if(done||Date.now()-_allPending.since>ALL_WAIT_MS) _allPending=null;
+  }
+  if(_allPending){
+    const btn=_allPending.action==='stop'?stop:start, other=btn===stop?start:stop;
+    other.hidden=true; btn.hidden=false; btn.disabled=true;
+    btn.innerHTML=ico('refresh')+(_allPending.action==='stop'?'Stopping monitors&hellip;':'Starting monitors&hellip;');
+    return;
+  }
+  start.disabled=stop.disabled=false;
+  start.innerHTML=ico('play')+(live>0?`Start the other ${total-live}`:'Start monitoring');
+  stop.innerHTML=ico('pause')+'Stop monitoring';
+  start.hidden=live>=total;
+  stop.hidden=live===0;
+}
+async function ctrlAll(action){
+  if(_allPending) return;
+  if(action==='stop' && !confirm('Stop monitoring?\n\nAll five monitors stop until you start them again here or run start_monitoring.bat. This console and the settings editor keep running.')) return;
+  _allPending={action, since:Date.now()};
+  if(_detData) render(_detData);
+  try{
+    const r=await fetch(`/api/monitors/${action}`, {method:'POST'});
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error||'Unknown error');
+    if(action==='stop') Object.keys(MONITOR_LABEL).forEach(k=>pendingStop.add(k));
+    notice(action==='stop'?'Monitors stopping. Their cards turn Paused within a minute or two.'
+      :(d.started&&d.started.length?`Started: ${d.started.map(k=>MONITOR_LABEL[k]||k).join(', ')}.`:'All monitors were already running.'));
+  } catch(e){
+    _allPending=null;
+    notice(`Could not ${action} monitoring: ${e.message}`, 8000);
+  }
+  fetchStatus();
 }
 
 async function ctrlMonitor(action, key){
@@ -840,13 +903,19 @@ function _dNetwork(nets){
   ${_drow('Timeout',`${n.timeout_sec||5}s`)}${_drow('Check interval',`<b>${n.check_interval_sec||30}s</b>`)}
   <div class="det-thresh-hd">Thresholds</div>${_dThresholds(n.thresholds)}</div>`).join('');
 }
-function _dDocument(doc){
-  if(!doc) return '<div class="none">No document monitor configured.</div>';
-  return `<div class="det-card"><div class="det-card-title">${ico('document')}${esc(doc.display_name||'Document')}</div>
-  ${_drow('File',_code(doc.path))}${doc.sheet_name?_drow('Sheet',esc(doc.sheet_name)):''}
-  ${_drow('Rows',`${esc(doc.filter_column||'')} = <b>${esc(doc.filter_value||'')}</b>`)}${_drow('Sum of',esc(doc.value_column||''))}
-  ${_drow('Target',`<b>${esc(doc.unit||'')}${esc(doc.target)}</b>`)}${_drow('Check interval',`<b>${doc.check_interval_sec||60}s</b>`)}
+function _dDocument(docs){
+  if(!docs||!docs.length) return '<div class="none">No document monitors configured.</div>';
+  return docs.map(doc=>{
+    const size=doc.measure==='file_size', su=esc(doc.size_unit||'MB');
+    const how=size?_drow('Measure','File size')
+      :`${_drow('Measure','Sum of a column')}${doc.sheet_name?_drow('Sheet',esc(doc.sheet_name)):''}
+  ${_drow('Rows',`${esc(doc.filter_column||'')} = <b>${esc(doc.filter_value||'')}</b>`)}${_drow('Sum of',esc(doc.value_column||''))}`;
+    const target=size?`<b>${esc(doc.target)} ${su}</b>`:`<b>${esc(doc.unit||'')}${esc(doc.target)}</b>`;
+    return `<div class="det-card"><div class="det-card-title">${ico('document')}${esc(doc.display_name||'Document')}</div>
+  ${_drow('File',_code(doc.path))}${how}
+  ${_drow('Target',target)}${_drow('Check interval',`<b>${doc.check_interval_sec||60}s</b>`)}
   <div class="det-thresh-hd">Thresholds</div>${_dThresholds(doc.thresholds)}</div>`;
+  }).join('');
 }
 
 // ── Refresh loop ────────────────────────────────────────────────────────────

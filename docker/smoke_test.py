@@ -20,6 +20,13 @@ def get(url):
         return r.status, r.headers.get("Content-Type", ""), r.read()
 
 
+def post(url):
+    """Same-origin POST, as the console page sends it."""
+    req = urllib.request.Request(url, data=b"", method="POST", headers={"Origin": CONSOLE})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return json.loads(r.read())
+
+
 def wait_for_status(timeout=60):
     deadline = time.monotonic() + timeout
     last = None
@@ -28,7 +35,7 @@ def wait_for_status(timeout=60):
             status = json.loads(get(CONSOLE + "/api/status")[2])
             last = status
             editor_up = any(h.get("port") == 5757 and h.get("reachable") for h in status.get("network", []))
-            if all(status["engine"]["monitors"].values()) and status.get("document") and editor_up:
+            if all(status["engine"]["monitors"].values()) and status.get("documents") and editor_up:
                 return status
         except Exception as exc:          # not up yet
             last = exc
@@ -48,10 +55,20 @@ def main():
     check(s["capabilities"] == {"control": False, "open_editor": True}, "console is read-only")
     check(len(s["processes"]) >= 3 and len(s["performance"]) == 2, "processes and CPU/RAM are reported")
     check(s["disks"] and s["network"], "disk and network are reported")
-    check(s["document"]["total"] == 340.15 and s["document"]["current_level"] == "warning",
+    docs = {d["display_name"]: d for d in s["documents"]}
+    groceries = docs.get("Groceries spend (monthly budget)", {})
+    check(groceries.get("total") == 340.15 and groceries.get("current_level") == "warning",
           "the document monitor reads the real CSV (340.15, warning)")
+    check(docs.get("Eating out spend (monthly budget)", {}).get("current_level") == "ok",
+          "the second budget document is reported (ok)")
+    log_size = docs.get("Monitor log size", {})
+    check(log_size.get("measure") == "file_size" and log_size.get("error") is None and log_size.get("unit") == "MB",
+          "the file-size document is reported")
     editor_row = next(h for h in s["network"] if h["port"] == 5757)
     check(editor_row["reachable"], "the settings editor row is online (real check)")
+
+    stop = post(CONSOLE + "/api/monitors/stop")
+    check(stop["ok"] is False and "Windows" in stop["error"], "the banner's stop monitoring is refused in the container")
 
     status, ctype, body = get(CONSOLE + "/")
     check(status == 200 and b"Monitoring Console" in body, "console page loads")

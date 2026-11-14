@@ -178,6 +178,95 @@ def start_monitor(key: str) -> dict:
     return {"ok": True}
 
 
+def running_monitors() -> set:
+    """Keys of this install's monitors that are running now (one PowerShell query for all).
+
+    Matched on the script's full path, so a second copy of the project elsewhere on the
+    machine is neither counted nor touched by the banner's Start / Stop monitoring.
+    """
+    paths = {str(path).lower(): key for key, path in MONITOR_SCRIPTS.items()}
+    cmd = (
+        "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue"
+        " | Where-Object { $_.Name -like 'power*' -or $_.Name -like 'pwsh*' }"
+        " | ForEach-Object { $_.CommandLine }"
+    )
+    try:
+        r = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd],
+            capture_output=True, text=True, timeout=15,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except Exception:
+        return set()
+    running = set()
+    for line in r.stdout.splitlines():
+        low = line.lower()
+        for path, key in paths.items():
+            if path in low:
+                running.add(key)
+    return running
+
+
+def start_all() -> dict:
+    """Start every monitor that is not running (the banner's Start monitoring)."""
+    if not IS_WINDOWS:
+        return {"ok": False, "error": NOT_ON_THIS_PLATFORM}
+    already = running_monitors()
+    started, errors = [], []
+    for key, path in MONITOR_SCRIPTS.items():
+        if key in already:
+            continue
+        if not path.exists():
+            errors.append(f"{key}: script not found")
+            continue
+        subprocess.Popen(
+            ["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoProfile",
+             "-WindowStyle", "Hidden", "-File", str(path)],
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        started.append(key)
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _log_action(f"[{ts}] ACTION: monitors STARTED by user via console "
+                f"({', '.join(started) or 'all were already running'}).")
+    result = {"ok": not errors, "started": started, "already_running": sorted(already)}
+    if errors:
+        result["error"] = "; ".join(errors)
+    return result
+
+
+def stop_all() -> dict:
+    """Stop this install's monitor scripts (the banner's Stop monitoring).
+
+    The console and the editor stay up, and so does a second copy of the project elsewhere
+    on the machine: processes are matched on each script's full path.
+    """
+    if not IS_WINDOWS:
+        return {"ok": False, "error": NOT_ON_THIS_PLATFORM}
+    paths = ",".join("'" + str(p).lower().replace("'", "''") + "'" for p in MONITOR_SCRIPTS.values())
+    cmd = (
+        f"$paths=@({paths});"
+        f"Get-CimInstance Win32_Process | Where-Object {{"
+        f" ($_.Name -eq 'powershell.exe' -or $_.Name -eq 'pwsh.exe') -and $_.ProcessId -ne $PID -and $_.CommandLine }}"
+        f" | ForEach-Object {{ $p=$_; $cl=$p.CommandLine.ToLower();"
+        f" if(@($paths | Where-Object {{ $cl.Contains($_) }}).Count -gt 0){{"
+        f" Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }} }}"
+    )
+    subprocess.Popen(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd],
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _log_action(f"[{ts}] ACTION: all monitors STOPPED by user via console.")
+    return {"ok": True}
+
+
+def as_list(value) -> list:
+    """The "document" section is a list since v1.7; a v1.6 single object is still accepted."""
+    if isinstance(value, list):
+        return [v for v in value if isinstance(v, dict)]
+    return [value] if isinstance(value, dict) and value else []
+
+
 def _port_open(port: int, timeout: float = 0.3, host: str = "127.0.0.1") -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -276,7 +365,8 @@ def get_status():
     perf_int  = cfg.get("performance", {}).get("cpu", {}).get("check_interval_sec", 10)
     disk_int  = min((d.get("check_interval_sec", 60) for d in cfg.get("disk", [])), default=60)
     net_int   = min((h.get("check_interval_sec", 30) for h in cfg.get("network", [])), default=30)
-    doc_int   = (cfg.get("document") or {}).get("check_interval_sec", 60)
+    doc_cfg   = as_list(cfg.get("document"))
+    doc_int   = min((d.get("check_interval_sec", 60) for d in doc_cfg), default=60)
     monitors = {
         "process":     proc_ok,
         "performance": _check_fresh(PERF_STATE_FILE,   perf_int),
@@ -340,6 +430,12 @@ def get_status():
         doc_state = json.loads(DOC_STATE_FILE.read_text(encoding="utf-8-sig"))
     except Exception:
         pass
+    if isinstance(doc_state, dict) and "documents" in doc_state:
+        documents = as_list(doc_state.get("documents"))
+    elif isinstance(doc_state, dict) and "display_name" in doc_state:
+        documents = [doc_state]                  # a v1.6 monitor's single-document state file
+    else:
+        documents = []
 
     return {
         "engine":        {"ok": any(monitors.values()), "monitors": monitors,
@@ -351,7 +447,7 @@ def get_status():
         "performance":   perf_state.get("metrics", []),
         "disks":         disk_state.get("drives", []),
         "network":       net_state.get("hosts", []),
-        "document":      doc_state if doc_state else None,
+        "documents":     documents,
         "config": {
             "meta":        cfg.get("_meta", {}),
             "global":      cfg.get("global", {}),
@@ -359,7 +455,7 @@ def get_status():
             "performance": cfg.get("performance", {}),
             "disk":        cfg.get("disk", []),
             "network":     cfg.get("network", []),
-            "document":    cfg.get("document"),
+            "document":    doc_cfg,
         },
         "capabilities":  {"control": IS_WINDOWS, "open_editor": IS_WINDOWS or DEMO_MODE},
         "demo_mode":     DEMO_MODE,
@@ -402,6 +498,10 @@ class Handler(BaseHTTPRequestHandler):
         parts = self.path.strip("/").split("/")
         if parts == ["api", "open-editor"]:
             body = json.dumps(open_editor(), ensure_ascii=False).encode("utf-8")
+            self._send(body, "application/json; charset=utf-8")
+        elif len(parts) == 3 and parts[:2] == ["api", "monitors"] and parts[2] in ("start", "stop"):
+            result = start_all() if parts[2] == "start" else stop_all()
+            body = json.dumps(result, ensure_ascii=False).encode("utf-8")
             self._send(body, "application/json; charset=utf-8")
         elif len(parts) == 3 and parts[0] == "api" and parts[1] in ("stop", "start"):
             action, key = parts[1], parts[2]

@@ -78,11 +78,16 @@ function Get-ActionGroups ($Config) {
             $k++
         }
     }
-    $j = 0
-    foreach ($t in @($Config.document.thresholds)) {
-        if ($null -eq $t) { continue }
-        $groups += @{ Where = "document.thresholds[$j]"; Section = 'document'; Level = $t.level; Actions = @($t.actions) }
-        $j++
+    $k = 0
+    foreach ($doc in @($Config.document)) {      # a list since v1.7 (a v1.6 single object works too)
+        if ($null -eq $doc) { continue }
+        $j = 0
+        foreach ($t in @($doc.thresholds)) {
+            if ($null -eq $t) { continue }
+            $groups += @{ Where = "document[$k].thresholds[$j]"; Section = 'document'; Level = $t.level; Actions = @($t.actions) }
+            $j++
+        }
+        $k++
     }
     return $groups
 }
@@ -230,34 +235,51 @@ function Test-DoctorConfig ($Config) {
         $k++
     }
 
-    # document
-    $doc = $Config.document
-    if ($null -ne $doc) {
-        foreach ($f in 'path', 'filter_column', 'filter_value', 'value_column') {
-            if (-not (Test-HasValue $doc $f)) { $r += New-DoctorResult $cat 'FAIL' "document.$f" 'Missing'; $errors++ }
+    # document: a list since v1.7 (a v1.6 single object is still accepted)
+    $k = 0
+    $seenDocs = @{}
+    foreach ($doc in @($Config.document)) {
+        if ($null -eq $doc) { continue }
+        $where   = "document[$k]"
+        $measure = if (Test-HasValue $doc 'measure') { [string]$doc.measure } else { 'sum' }
+        if ($measure -notin @('sum', 'file_size')) {
+            $r += New-DoctorResult $cat 'FAIL' "$where.measure" "'$measure' must be sum or file_size"; $errors++
         }
+        $required = if ($measure -eq 'file_size') { @('path') } else { @('path', 'filter_column', 'filter_value', 'value_column') }
+        foreach ($f in $required) {
+            if (-not (Test-HasValue $doc $f)) { $r += New-DoctorResult $cat 'FAIL' "$where.$f" 'Missing'; $errors++ }
+        }
+        if ($measure -eq 'file_size' -and (Test-HasValue $doc 'size_unit') -and ([string]$doc.size_unit) -notin @('KB', 'MB', 'GB')) {
+            $r += New-DoctorResult $cat 'FAIL' "$where.size_unit" "'$($doc.size_unit)' must be KB, MB or GB"; $errors++
+        }
+        $name = [string]$doc.display_name
+        if ($name -and $seenDocs.ContainsKey($name)) {
+            $r += New-DoctorResult $cat 'FAIL' "$where.display_name" "'$name' is used twice; document names must be unique (they key alerts and console rows)"; $errors++
+        }
+        if ($name) { $seenDocs[$name] = $true }
         if (-not (Test-IsNumber $doc.target) -or $doc.target -le 0) {
-            $r += New-DoctorResult $cat 'FAIL' 'document.target' 'Must be a positive number'; $errors++
+            $r += New-DoctorResult $cat 'FAIL' "$where.target" 'Must be a positive number'; $errors++
         }
-        if ([string]$doc.path -match '\.xls[xm]?$' -and -not (Test-HasValue $doc 'sheet_name')) {
-            $r += New-DoctorResult $cat 'FAIL' 'document.sheet_name' 'Excel documents need the worksheet name'; $errors++
+        if ($measure -eq 'sum' -and [string]$doc.path -match '\.xls[xm]?$' -and -not (Test-HasValue $doc 'sheet_name')) {
+            $r += New-DoctorResult $cat 'FAIL' "$where.sheet_name" 'Excel documents need the worksheet name'; $errors++
         }
         if ((Test-HasValue $doc 'check_interval_sec') -and (-not (Test-IsNumber $doc.check_interval_sec) -or $doc.check_interval_sec -le 0)) {
-            $r += New-DoctorResult $cat 'FAIL' 'document.check_interval_sec' 'Must be a positive number'; $errors++
+            $r += New-DoctorResult $cat 'FAIL' "$where.check_interval_sec" 'Must be a positive number'; $errors++
         }
         $j = 0
         foreach ($t in @($doc.thresholds)) {
             if ($null -eq $t) { continue }
-            $where = "document.thresholds[$j]"
+            $tw = "$where.thresholds[$j]"
             if (-not (Test-IsNumber $t.percent_of_target) -or $t.percent_of_target -le 0) {
-                $r += New-DoctorResult $cat 'FAIL' "$where.percent_of_target" 'Must be a positive number (percent of document.target)'; $errors++
+                $r += New-DoctorResult $cat 'FAIL' "$tw.percent_of_target" "Must be a positive number (percent of $where.target)"; $errors++
             }
             if ($t.condition -notin @('above', 'below')) {
-                $r += New-DoctorResult $cat 'FAIL' "$where.condition" "'$($t.condition)' must be above or below"; $errors++
+                $r += New-DoctorResult $cat 'FAIL' "$tw.condition" "'$($t.condition)' must be above or below"; $errors++
             }
-            $bad = @(Test-ClearSettings $t $where); $r += $bad; $errors += $bad.Count
+            $bad = @(Test-ClearSettings $t $tw); $r += $bad; $errors += $bad.Count
             $j++
         }
+        $k++
     }
     if ($null -ne $Config.ebook_sales) {
         $r += New-DoctorResult $cat 'WARN' 'ebook_sales' 'Replaced by the "document" section in v1.6.0 and ignored; see docs/configuration.md'
@@ -345,18 +367,23 @@ function Test-DoctorPaths ($Config) {
         }
     }
 
-    # document file (+ Excel, only when it is a workbook)
-    $doc = $Config.document
-    if ($null -ne $doc -and $doc.path) {
-        $file = Resolve-ProjectPath ([string]$doc.path)
-        if (Test-Path $file) { $r += New-DoctorResult $cat 'OK' 'Document file' $doc.path }
-        else { $r += New-DoctorResult $cat 'FAIL' 'Document file' "Not found: $file" }
-        if ([string]$doc.path -match '\.xls[xm]?$') {
-            if (Test-Path 'Registry::HKEY_CLASSES_ROOT\Excel.Application') {
-                $r += New-DoctorResult $cat 'OK' 'Excel COM registered' 'needed to read the .xlsx document'
-            } else {
-                $r += New-DoctorResult $cat 'WARN' 'Excel COM registered' 'Microsoft Excel not found; use a .csv document or install Excel'
-            }
+    # document files (+ Excel, only when a workbook is read)
+    $needExcel = $false
+    foreach ($doc in @($Config.document)) {
+        if ($null -eq $doc -or -not $doc.path) { continue }
+        $file   = Resolve-ProjectPath ([string]$doc.path)
+        $isSize = ([string]$doc.measure) -eq 'file_size'
+        $label  = "Document file ($($doc.display_name))"
+        if (Test-Path $file) { $r += New-DoctorResult $cat 'OK' $label $doc.path }
+        elseif ($isSize) { $r += New-DoctorResult $cat 'WARN' $label "Not created yet: $file (its size counts as 0 until it exists)" }
+        else { $r += New-DoctorResult $cat 'FAIL' $label "Not found: $file" }
+        if (-not $isSize -and [string]$doc.path -match '\.xls[xm]?$') { $needExcel = $true }
+    }
+    if ($needExcel) {
+        if (Test-Path 'Registry::HKEY_CLASSES_ROOT\Excel.Application') {
+            $r += New-DoctorResult $cat 'OK' 'Excel COM registered' 'needed to read the .xlsx document'
+        } else {
+            $r += New-DoctorResult $cat 'WARN' 'Excel COM registered' 'Microsoft Excel not found; use a .csv document or install Excel'
         }
     }
 

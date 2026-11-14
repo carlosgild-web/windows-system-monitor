@@ -95,6 +95,62 @@ Describe 'Get-DocumentTotal' {
     }
 }
 
+Describe 'Get-DocumentList' {
+    It 'returns every entry of a v1.7 list' {
+        $cfg = [pscustomobject]@{ document = @([pscustomobject]@{ display_name = 'A' }, [pscustomobject]@{ display_name = 'B' }) }
+        (Get-DocumentList $cfg).display_name | Should -Be @('A', 'B')
+    }
+
+    It 'wraps a v1.6 single object, and returns nothing without the section' {
+        @(Get-DocumentList ([pscustomobject]@{ document = [pscustomobject]@{ display_name = 'A' } })).Count | Should -Be 1
+        @(Get-DocumentList ([pscustomobject]@{ global = @{} })).Count | Should -Be 0
+    }
+}
+
+Describe 'The file_size measure' {
+    BeforeAll {
+        $file = Join-Path $TestDrive 'big.log'
+        [System.IO.File]::WriteAllBytes($file, (New-Object byte[] (3 * 1024 * 1024 + 512 * 1024)))   # 3.5 MB
+    }
+
+    It 'reads the size in <Unit>' -ForEach @(
+        @{ Unit = 'KB'; Expected = 3584 }
+        @{ Unit = 'MB'; Expected = 3.5 }
+        @{ Unit = 'GB'; Expected = 0 }
+    ) {
+        $r = Get-DocumentTotal ([pscustomobject]@{ measure = 'file_size'; path = $file; size_unit = $Unit })
+        $r.error | Should -BeNullOrEmpty
+        $r.total | Should -Be $Expected
+    }
+
+    It 'defaults to MB' {
+        (Get-DocumentTotal ([pscustomobject]@{ measure = 'file_size'; path = $file })).total | Should -Be 3.5
+    }
+
+    It 'counts a file that does not exist yet as 0, with a note' {
+        $r = Get-DocumentTotal ([pscustomobject]@{ measure = 'file_size'; path = (Join-Path $TestDrive 'later.log') })
+        $r.error | Should -BeNullOrEmpty
+        $r.total | Should -Be 0
+        $r.note  | Should -Match 'not created yet'
+    }
+
+    It 'reports a folder as an error' {
+        (Get-DocumentTotal ([pscustomobject]@{ measure = 'file_size'; path = $TestDrive })).error | Should -Match 'folder'
+    }
+
+    It 'rejects an unknown measure' {
+        (Get-DocumentTotal ([pscustomobject]@{ measure = 'rows'; path = $file })).error | Should -Match "Unknown measure 'rows'"
+    }
+
+    It 'uses the size unit as {unit}, and sum stays the default measure' {
+        $doc = [pscustomobject]@{ display_name = 'Log'; measure = 'file_size'; size_unit = 'KB'; unit = '$'; target = 100
+            thresholds = @([pscustomobject]@{ level = 'warning'; condition = 'above'; percent_of_target = 80; actions = @() }) }
+        (Get-DocumentChecks $doc 90 (Get-Date) 'pc').Checks[0].Vars.unit | Should -Be 'KB'
+        Get-DocumentMeasure ([pscustomobject]@{ path = 'a.csv' }) | Should -Be 'sum'
+        Get-DocumentUnit ([pscustomobject]@{ unit = '$' }) | Should -Be '$'
+    }
+}
+
 Describe 'Get-DocumentChecks' {
     BeforeAll {
         function New-Doc ([string]$Condition) {

@@ -171,7 +171,7 @@ A broken config produces specific findings, and the exit code is the number of f
 | Performance | CPU % and RAM % | A level held for `sustain_sec` |
 | Disk | Percent used per drive | `percent_used` thresholds |
 | Network | ICMP ping or TCP connect | Latency (`latency_ms`) or `"unreachable"` |
-| Document | Sum of a filtered column in a `.csv` or `.xlsx` | Total `above` or `below` a percent of a target |
+| Document | A list of documents: the sum of a filtered column in a `.csv` or `.xlsx`, or a file's size | Value `above` or `below` a percent of a target |
 
 The full schema, template variables and action reference are in **[docs/configuration.md](docs/configuration.md)**.
 
