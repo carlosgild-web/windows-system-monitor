@@ -4,6 +4,8 @@ Web-based Process Monitoring Console.
 Usage: python monitoring_console.py
        Browser opens automatically at http://localhost:5758
 """
+import hashlib
+import http.client
 import json
 import os
 import shutil
@@ -275,6 +277,29 @@ def _port_open(port: int, timeout: float = 0.3, host: str = "127.0.0.1") -> bool
         return False
 
 
+def copy_id(base: Path) -> str:
+    """Identifies this copy of the project without revealing its path (same as server.py)."""
+    return hashlib.sha256(str(base).lower().encode("utf-8")).hexdigest()[:16]
+
+
+def editor_identity(timeout: float = 1.5):
+    """The /api/identity of the editor on port 5757, or None (an older editor, or not an editor)."""
+    try:
+        conn = http.client.HTTPConnection(EDITOR_HOST, EDITOR_PORT, timeout=timeout)
+        try:
+            conn.request("GET", "/api/identity", headers={"Host": f"localhost:{EDITOR_PORT}"})
+            resp = conn.getresponse()
+            body = resp.read(4096)
+        finally:
+            conn.close()
+        if resp.status != 200:
+            return None
+        data = json.loads(body)
+        return data if isinstance(data, dict) and data.get("app") == "settings-editor" else None
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+
+
 def open_editor(wait_sec: float = 6.0) -> dict:
     """Start the settings editor (server.py) in the background unless it already runs.
 
@@ -284,7 +309,18 @@ def open_editor(wait_sec: float = 6.0) -> dict:
     """
     url = f"http://localhost:{EDITOR_PORT}"
     if _port_open(EDITOR_PORT, host=EDITOR_HOST):
-        return {"ok": True, "url": url, "already_running": True}
+        # Something already listens on 5757: open it only if it is this copy's editor.
+        ident = editor_identity()
+        if ident and ident.get("copy_id") == copy_id(BASE):
+            return {"ok": True, "url": url, "already_running": True}
+        if ident:
+            what = (f"the settings editor of another copy of this project "
+                    f"(its settings are v{ident.get('version', '?')})")
+        else:
+            what = "an older settings editor (another copy of this project) or another program"
+        return {"ok": False, "foreign_editor": True,
+                "error": f"Port {EDITOR_PORT} is used by {what}, so this console's settings would not be shown. "
+                         f"Stop it, then click Open Monitoring settings again."}
     if not IS_WINDOWS:
         return {"ok": False, "error": "The settings editor is not running"}
     if not EDITOR_SCRIPT.exists():

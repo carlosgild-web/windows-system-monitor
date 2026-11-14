@@ -78,7 +78,10 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
   matched on the full script path so another copy of the project on the machine is left alone. The console and
   the editor keep running.
 - **`POST /api/open-editor`** (console): starts `server.py --no-browser` hidden with its full path (that's how
-  `stop_monitoring.ps1` finds it) unless port 5757 already answers, waits for it, and returns its URL.
+  `stop_monitoring.ps1` finds it) unless port 5757 already answers, waits for it, and returns its URL. When 5757
+  already answers, it opens it only if the editor's `GET /api/identity` `copy_id` (hash of the project folder,
+  `copy_id()` in both `server.py` and the console; a test keeps them equal) matches its own; otherwise it returns
+  `foreign_editor: true` and an explanation.
 - **Web UI**: the console page is `web/console.html` (plain HTML/JS, no build step); the editor is
   `monitoring_editor.html`. Both load `web/static/theme.css` (color tokens, light + dark), `theme.js` (theme switch)
   and `icons.svg` (sprite: `<svg class="icon"><use href="/static/icons.svg#i-name"/></svg>`) through a `/static/`
