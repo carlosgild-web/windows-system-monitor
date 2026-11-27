@@ -110,6 +110,56 @@ monitors and the UI only exchange JSON state files (section 2), a small simulato
 
 The full explanation is in [docker.md](docker.md).
 
+## 10. The AI explains; the monitors decide
+
+The incident assistant (v1.7.0) answers two questions an alert leaves open: *why* did this cross the line, and
+*what do I do now*. It explains one incident and drafts the ticket text. It decides nothing.
+
+- **Read-only tools.** The model can call four tools: `get_incident`, `get_recent_events`, `get_runbook`,
+  `get_monitor_config`. They read the state files, `logs/monitor.log` and the config (e-mail addresses redacted).
+  No tool pauses a monitor, edits the settings, runs a script or sends anything, and a test checks the registry for
+  side effects.
+- **Code owns the decisions.** Thresholds, levels, actions and ticket priority, impact, urgency and category come from
+  the config and the monitors. The model writes the short description, the description and the work notes. It
+  cannot change the other fields.
+- **Grounded numbers.** Every number in an answer must appear in a tool result. An answer check, like the one in
+  luna-hybrid-agent, flags any number it cannot trace.
+- **Data is data.** Process names, document values and log lines go to the model as tool results, never as
+  instructions. The evaluation includes prompt-injection cases for each of these sources.
+- **Off the monitor loop.** The monitors never wait on the model. The `file://` ticket preview that a monitor
+  opens stays rule-based. *Draft with AI* lives in a copy of the same `web/ticket.html` that the console serves
+  at `/tickets/<number>`, behind the console's same-origin checks.
+- **Incidents are persisted.** So the assistant can read an incident's start time, sustain and peak,
+  `Invoke-ThresholdAlerts` writes the open incidents (`monitor:target:level`) into each state file. Before
+  v1.7.0 they lived only in the monitor's memory. Each threshold can also carry an optional `runbook` text, and
+  processes keep `instructions`.
+
+## 11. Ollama over the standard library
+
+The project's promise is "Python standard library only". The assistant keeps it: `OllamaClient` talks to Ollama's
+native `/api/chat` with `tools` through `urllib.request` and `json`. It uses no SDK and no agent framework.
+
+- **Local by default.** `ai.ollama_url` must be a loopback address unless `ai.allow_remote: true`, so incident
+  data stays on the machine. The default model is `qwen3:4b-instruct-2507-q4_K_M`, the model luna-hybrid-agent was
+  evaluated on, with native tool calling. Use `qwen2.5:3b` on 8 GB machines.
+- **Bounded and traced.** One run makes at most `ai.max_model_calls` model calls (default 5), with a timeout per
+  call and a token budget. Every run is saved as JSON under `logs/ai_traces/` (rotated), and the console's
+  *Agent steps* view reads it from `GET /api/ai/runs/{id}`, polled while the run is in progress. Polling was chosen
+  over SSE so the console can stay single-threaded.
+- **Off by default.** `ai.enabled` is `false` in the shipped config. When Ollama is not reachable, a `DemoClient`
+  (templates and rules, no model) answers instead, and the UI labels it "Demo (rules, no AI)". The Docker demo uses
+  it. A `FakeClient` scripts the model for the tests.
+- **The doctor checks it.** If Ollama is reachable and the model is present, the check is `OK`. Otherwise it is a
+  `WARN`, never a `FAIL`, because the monitors work without the assistant.
+
+## 12. Evaluating the assistant
+
+About 20 incident scenarios: one per monitor type and level, a recovery, a missing runbook, a stale monitor, prompt
+injection through a process name, a CSV value and a log line, and one in Spanish. Each run is scored from its trace:
+right tools called, the facts (metric, value, threshold, duration), no untraced numbers, runbook cited, ticket
+priority unchanged, injection ignored. CI runs the suite with `FakeClient` and requires 100 %. A run on the real
+local model is written up in `docs/eval/`, failures included.
+
 ## Known limitations
 
 - **Windows-only by design.** The Docker image is a demo with simulated monitors; see section 9.
