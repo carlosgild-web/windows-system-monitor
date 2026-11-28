@@ -6,8 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-28
+
 ### Added
-- **Incident assistant, part 1: settings and data** (the assistant itself follows in this release). A new optional
+- **Incident assistant: settings and data.** A new optional
   `ai` section (`enabled` is false in the shipped file): a local Ollama URL, which must be this machine unless
   `allow_remote` is true, plus the model, a fallback model, a timeout, a model-call limit, a token budget and the
   number of traces kept. The doctor validates it and, when it is enabled, checks that Ollama answers and the model is
@@ -172,6 +174,7 @@ First public release.
 - Config paths are relative to the project folder, so the repo runs from any location.
 - `{latency_ms}` in network templates refers to the threshold, consistent with the other monitors.
 
-[Unreleased]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/carlosgild-web/windows-system-monitor/releases/tag/v1.5.0

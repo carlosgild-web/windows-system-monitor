@@ -30,11 +30,18 @@ live web dashboard.
 - **Live web console.** Merges the monitors' state files with a real-time process check, lets you pause and resume
   each monitor, and shows a runbook for each failing process. Light and dark themes, and a built-in demo guide
   ("How this demo works") for anyone trying it out.
+- **A local AI incident assistant.** *Explain* on an open incident: a small model running on the PC (Ollama)
+  reads the incident, the log and the runbook through read-only tools, then says what happened and what to do.
+  *Draft with AI* writes the ticket text. The AI explains; the monitors decide: thresholds, priorities and actions
+  stay in the config, every number in an answer is checked against the monitors' data, and the tools cannot change
+  anything. Off by default; without Ollama the same panel answers with rules. Evaluated on 21 scenarios, failures
+  included: [docs/eval/](docs/eval/README.md).
 - **Self-diagnosing.** `doctor.bat` checks the environment, config schema, paths and running monitors. The launcher
   runs the same checks before starting anything, so a bad config fails loudly instead of silently.
-- **Tested.** 180 Pester tests and 56 Python tests on Windows PowerShell 5.1, plus a Docker smoke test on Linux,
+- **Tested.** 242 Pester tests and 175 Python tests on Windows PowerShell 5.1, plus a Docker smoke test on Linux,
   in GitHub Actions.
-- **No dependencies beyond Windows and Python.** The web servers use only the Python standard library.
+- **No dependencies beyond Windows and Python.** The web servers and the assistant use only the Python standard
+  library (the assistant talks to Ollama over HTTP).
 
 ## Screenshots
 
@@ -180,8 +187,9 @@ The full schema, template variables and action reference are in **[docs/configur
 ## Testing
 
 ```powershell
-python -m unittest discover -s tests/python -v      # editor server + console logic
+python -m unittest discover -s tests/python -v      # editor server, console, assistant, evaluation
 Invoke-Pester tests/powershell                      # requires Pester 5.5+
+python eval/assistant_eval.py --client ollama       # the assistant on the real local model (see docs/eval/)
 ```
 
 - **Static checks on every script:** it parses; no non-ASCII string literals (PowerShell 5.1 reads files as
@@ -191,6 +199,10 @@ Invoke-Pester tests/powershell                      # requires Pester 5.5+
 - **Editor server:** settings round-trip; CSRF and DNS-rebinding rejection; invalid bodies; path traversal on
   `/api/open-file`.
 - **Console:** freshness windows, live-check override, and corrupt, missing or BOM-prefixed files.
+- **Incident assistant:** the tools have no side effects; runs stop at their call and token limits; prompt
+  injection through a process name, a document value and a log line; the ticket's priority never comes from the
+  model; the `/api/ai/` routes reject cross-origin and rebinding requests; 21 evaluation scenarios with a scripted
+  model must all pass.
 
 [CI](.github/workflows/ci.yml) runs all of the above, plus PSScriptAnalyzer and the doctor, on `windows-latest`.
 
@@ -205,9 +217,11 @@ Invoke-Pester tests/powershell                      # requires Pester 5.5+
 ├── server.py                     # settings editor backend (stdlib HTTP server, :5757)
 ├── monitoring_editor.html        # settings editor UI
 ├── MonitoringConsole/
-│   └── monitoring_console.py     # live dashboard backend (stdlib HTTP server, :5758)
+│   ├── monitoring_console.py     # live dashboard backend (stdlib HTTP server, :5758)
+│   └── ai/                       # incident assistant: Ollama client, read-only tools, bounded loop, traces
 ├── web/
 │   ├── console.html              # live dashboard page
+│   ├── ticket.html               # simulated incident ticket (email_draft), Draft with AI
 │   └── static/                   # shared theme (light/dark), SVG icons, served at /static/ by both servers
 ├── scripts/
 │   ├── process_monitor.ps1       # one script per monitor
@@ -225,7 +239,8 @@ Invoke-Pester tests/powershell                      # requires Pester 5.5+
 ├── docker/                       # demo container: simulator, entry point, smoke test
 ├── Dockerfile, docker-compose.yml
 ├── tests/                        # Pester + Python unittest suites
-└── docs/                         # configuration reference, design decisions, screenshots
+├── eval/                         # the assistant's evaluation (21 scenarios)
+└── docs/                         # configuration reference, design decisions, evaluation reports, screenshots
 ```
 
 ## Design decisions
@@ -240,6 +255,8 @@ The short version (details and trade-offs in **[docs/design-decisions.md](docs/d
   make configuration problems visible *before* anything starts.
 - **Localhost-only, same-origin APIs.** Both servers bind to `localhost` and reject cross-origin or rebinding
   requests, so a malicious web page can't rewrite the config or trigger actions.
+- **The AI explains; the monitors decide.** The assistant's tools only read, the code sets the ticket's
+  priority, the model runs on this machine, and no answer is accepted before the data has been read.
 - **Docker runs the demo, not the monitors.** The monitors depend on WMI, perf counters, Excel COM and the Windows
   desktop, which a container is isolated from by design. The image runs the real console and editor with simulated
   monitors instead. See [docs/docker.md](docs/docker.md).
@@ -255,6 +272,7 @@ The short version (details and trade-offs in **[docs/design-decisions.md](docs/d
 
 - ⚙️ [Configuration reference](docs/configuration.md)
 - 🧭 [Design decisions](docs/design-decisions.md)
+- 🧪 [Evaluating the incident assistant](docs/eval/README.md)
 - 📝 [Changelog](CHANGELOG.md)
 
 ## License
