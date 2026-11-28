@@ -37,6 +37,7 @@ VALUE_UNITS = {
 }
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 MAX_STR = 200
+NO_RUNBOOK_NOTE = ("No runbook is configured for this threshold. Say so in the next steps, then suggest what an operator would check first.")
 MAX_EVENTS = 20
 LOG_TAIL_BYTES = 256 * 1024
 
@@ -186,8 +187,11 @@ def get_runbook(ctx: ToolContext, monitor: str, target: str, level: str) -> Dict
     for t in item.get("thresholds") or []:
         if isinstance(t, dict) and t.get("level") == level:
             text = t.get("runbook") if isinstance(t.get("runbook"), str) else None
-            return {"runbook": text, "source": f"the {level} threshold" if text else "none configured"}
-    return {"runbook": None, "note": f"no {level} threshold"}
+            if text:
+                return {"runbook": text, "source": f"the {level} threshold"}
+            # Small models skip a bare null; a sentence is read (eval run 1: 2 of 4 misses).
+            return {"runbook": None, "note": NO_RUNBOOK_NOTE}
+    return {"runbook": None, "note": f"No {level} threshold is configured. " + NO_RUNBOOK_NOTE}
 
 
 def get_monitor_config(ctx: ToolContext, monitor: str, target: str) -> Dict[str, Any]:

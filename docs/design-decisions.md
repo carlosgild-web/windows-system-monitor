@@ -159,11 +159,17 @@ native `/api/chat` with `tools` through `urllib.request` and `json`. It uses no 
 
 ## 12. Evaluating the assistant
 
-About 20 incident scenarios: one per monitor type and level, a recovery, a missing runbook, a stale monitor, prompt
-injection through a process name, a CSV value and a log line, and one in Spanish. Each run is scored from its trace:
-right tools called, the facts (metric, value, threshold, duration), no untraced numbers, runbook cited, ticket
-priority unchanged, injection ignored. CI runs the suite with `FakeClient` and requires 100 %. A run on the real
-local model is written up in `docs/eval/`, failures included.
+`eval/assistant_eval.py` has 21 scenarios: an explanation and a ticket for every monitor type, warning and
+critical levels, a closed incident, missing runbooks, a stale monitor, prompt injection through a process name, a
+document value and a log line, and two in Spanish. Each run is scored from its trace: grounded, the expected facts,
+no untraced numbers, the runbook cited (or its absence said), staleness reported, injection not obeyed, ticket
+fields unchanged, no file changed, the right language. CI runs it with a scripted reference model and requires
+100 %; a test also checks that the scorer fails bad answers, and pins the rules baseline.
+
+On the real model (qwen3:4b, a CPU-only laptop) the properties the code enforces held in every run: grounding,
+ticket fields, no side effects, injection. The model's own misses (a left-out threshold, a missing "no runbook",
+English for a Spanish request) moved between runs. The evaluation also found four things to fix in the code,
+among them a bug in the number check. The reports and what changed are in [docs/eval/](eval/README.md).
 
 ## Known limitations
 

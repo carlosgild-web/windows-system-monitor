@@ -27,10 +27,23 @@ def numbers_in(text: str) -> List[str]:
     return [m.group(0) for m in _NUMBER.finditer(_LIST_MARKER.sub(" ", text or ""))]
 
 
+def _texts(value: Any):
+    """Every string and number inside a tool result. Not json.dumps: that turns a new line into
+    the two characters \\n, and the "n" hides a number that starts the next line ("\\n2. Close...")."""
+    if isinstance(value, dict):
+        for k, v in value.items():
+            yield str(k)
+            yield from _texts(v)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            yield from _texts(v)
+    elif value is not None and not isinstance(value, bool):
+        yield str(value)
+
+
 def _source_values(sources: Iterable[Any]) -> Set[Decimal]:
     values: Set[Decimal] = set()
-    for src in sources:
-        text = src if isinstance(src, str) else json.dumps(src, ensure_ascii=False)
+    for text in (t for src in sources for t in _texts(src)):
         for raw in _NUMBER.findall(text):
             v = _value(raw)
             if v is not None:

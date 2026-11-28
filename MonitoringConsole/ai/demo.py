@@ -86,6 +86,10 @@ def _what_happened(inc: Dict[str, Any]) -> List[str]:
         facts.append("the process is not running")
     if facts:
         lines.append("Measured: " + ", ".join(facts) + ".")
+    cur = inc.get("current") if isinstance(inc.get("current"), dict) else {}
+    reading = _current_reading(inc.get("monitor"), cur)
+    if reading:
+        lines.append(reading)
     if inc.get("opened_at"):
         since = f"Open since {inc['opened_at']}"
         if inc.get("exceeded_since") and inc.get("exceeded_since") != inc.get("opened_at"):
@@ -93,7 +97,26 @@ def _what_happened(inc: Dict[str, Any]) -> List[str]:
         lines.append(since + ".")
     if inc.get("alert_count"):
         lines.append(f"Alerts so far: {_fmt(inc['alert_count'])}.")
+    if inc.get("monitor_stale"):
+        lines.append(f"The {inc.get('monitor')} monitor has not updated its state since "
+                     f"{inc.get('monitor_state_updated')}: this data may be out of date.")
     return lines
+
+
+def _current_reading(monitor: Any, cur: Dict[str, Any]) -> str:
+    """The item's current reading, from get_incident's "current" row."""
+    if monitor == "document" and cur.get("total") is not None and cur.get("target") is not None:
+        unit = str(cur.get("unit") or "")
+        if cur.get("measure") == "file_size":
+            return f"Current: {_fmt(cur['total'])} {unit} of {_fmt(cur['target'])} {unit}."
+        return f"Current total: {unit}{_fmt(cur['total'])} of a {unit}{_fmt(cur['target'])} target."
+    if monitor == "network" and cur.get("host"):
+        where = f"{cur['host']}:{cur['port']}" if cur.get("port") else str(cur["host"])
+        return f"Target {where} ({str(cur.get('protocol') or '').upper()}), " + \
+               ("reachable." if cur.get("reachable") else "not answering.")
+    if monitor == "disk" and cur.get("free_gb") is not None:
+        return f"Free space: {_fmt(cur['free_gb'])} GB."
+    return ""
 
 
 def _runbook_steps(runbook: Optional[str]) -> List[str]:

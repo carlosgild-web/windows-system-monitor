@@ -46,6 +46,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Grounding gate: the assistant's answer is only accepted after `get_incident` and `get_runbook` have returned
   data. When the model answers first (a 4B model sometimes does, or invents an incident id when asked to read),
   the console makes those two reads itself and asks again; the trace marks them "read by the console".
+- **Evaluation** (`eval/assistant_eval.py`): 21 incident scenarios scored from the assistant's traces (grounded,
+  facts, traced numbers, runbook, staleness, injection, ticket fields, side effects, language). CI runs them with a
+  scripted reference model (100 % required) and checks the rules baseline and that the scorer fails bad answers.
+  Reports in `docs/eval/`: the rules baseline (19 of 21) and two runs of qwen3:4b on a CPU-only laptop (17 and 16
+  of 21), with every failure and what it changed.
+
+### Fixed (found by the evaluation)
+- The answer check missed a number at the start of a runbook line (tool results were scanned as JSON text, where
+  the new line before it is the two characters `\n`), so a quoted step such as "2." was flagged as untraced.
+- `get_runbook` now says in a sentence that no runbook is configured (a bare `null` was ignored), and a Spanish
+  request also gets the language instruction in the system prompt.
+- The rules client now gives the item's current reading (total and target, host, free space) and says when the
+  monitor is stale.
 - Start / Stop monitoring buttons in the console's demo banner (`POST /api/monitors/start|stop`). They act on all
   five monitors of this install only, matched by full script path; the console and the editor keep running.
 - Document `measure: "file_size"`: watch a file's size in KB, MB or GB against a target. A file that does not exist

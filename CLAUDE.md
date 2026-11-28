@@ -27,6 +27,7 @@ keep personal data (real emails, names, phone numbers, hostnames, absolute paths
 | Python tests | `python -m unittest discover -s tests/python` |
 | PowerShell tests | `Invoke-Pester tests/powershell` (Pester 5.5+) |
 | Docker demo (simulated monitors) | `docker compose up --build`, then `python docker/smoke_test.py` |
+| Evaluate the incident assistant | `python eval/assistant_eval.py` (`--client rules`, or `--client ollama --report docs/eval/`) |
 
 `start_monitoring.bat` calls `scripts/start_monitoring.ps1`, which: (0) runs the doctor's config/path/environment
 checks and aborts **without touching running monitors** on any FAIL, (1) stops running monitors, (2) launches each

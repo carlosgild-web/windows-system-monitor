@@ -56,6 +56,10 @@ TASK_INSTRUCTIONS = {
                   "urgency and category are set by the system."),
 }
 LANGUAGE = {"en": "Answer in English.", "es": "Responde en español."}
+# Also in the system prompt: with the instruction only in the user message, qwen3:4b
+# answered a Spanish request in English (eval run 1).
+SYSTEM_LANGUAGE = {"en": "", "es": "\n7. Write the whole answer in Spanish (español), including the section "
+                                   "headings. Tool results are in English; translate what you use."}
 
 
 def _now() -> str:
@@ -155,7 +159,7 @@ class AssistantRun:
     def _loop(self, incident: Dict[str, Any]) -> None:
         user = "\n".join([task_message(self.task, self.incident_id), TASK_INSTRUCTIONS[self.task],
                           LANGUAGE[self.language]])
-        messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT},
+        messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT + SYSTEM_LANGUAGE[self.language]},
                                           {"role": "user", "content": user}]
         sources: List[Any] = [self.incident_id]
         read_ok = set()                        # tools that returned data in this loop

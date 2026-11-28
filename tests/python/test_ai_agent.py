@@ -357,6 +357,12 @@ class CheckTests(unittest.TestCase):
     def test_times_and_dates_trace_to_their_parts(self):
         self.assertTrue(check_numbers("open since 2026-11-28 10:00:30", ["2026-11-28 10:00:30"])["ok"])
 
+    def test_runbook_step_numbers_at_the_start_of_a_line_are_traced(self):
+        # Regression (eval run 2): json.dumps turned a new line before "2." into the two
+        # characters backslash-n, and the "n" hid the 2 from the check.
+        runbook = {"runbook": "1. Open Task Manager.\n2. Close what you do not need.\n3. Escalate."}
+        self.assertTrue(check_numbers("Open Task Manager. 2. Close apps. 3. Escalate.", [runbook])["ok"])
+
     def test_numbers_inside_names_are_not_counted_twice(self):
         self.assertTrue(check_numbers("Google DNS (TCP 53) is down", ["network:Google DNS (TCP 53):critical"])["ok"])
 

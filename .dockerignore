@@ -10,3 +10,4 @@ art
 *.vbs
 *.xlsx
 **/__pycache__
+eval
