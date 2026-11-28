@@ -26,6 +26,9 @@ from .tools import ToolRegistry
 from .trace import TraceStore
 
 MAX_TOOL_CALLS_PER_TURN = 4
+# The grounding gate: no answer is accepted before these tools have returned data.
+REQUIRED_READS = ("get_incident", "get_runbook")
+DEMO_CALLS = 4
 MAX_TOKENS_PER_CALL = 900
 MIN_TOKENS_TO_CALL = 200
 TRACE_TEXT_LIMIT = 4000
@@ -155,14 +158,17 @@ class AssistantRun:
         messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT},
                                           {"role": "user", "content": user}]
         sources: List[Any] = [self.incident_id]
+        read_ok = set()                        # tools that returned data in this loop
         schemas = self.registry.schemas()
         usage = self.trace["usage"]
         limit = self.settings.max_model_calls
+        if not self.client.is_ai:
+            limit = max(limit, DEMO_CALLS)      # the rules need their three rounds, and cost no tokens
         while True:
             if usage["model_calls"] >= limit:
                 raise _Stop("stopped", f"No answer within {limit} model calls (ai.max_model_calls).")
             spent = usage["prompt_tokens"] + usage["completion_tokens"]
-            remaining = self.settings.token_budget - spent
+            remaining = self.settings.token_budget - spent if self.client.is_ai else MAX_TOKENS_PER_CALL
             if remaining < MIN_TOKENS_TO_CALL:
                 raise _Stop("stopped", f"Token budget used up ({spent} of {self.settings.token_budget}, ai.token_budget).")
             last = usage["model_calls"] == limit - 1
@@ -184,6 +190,8 @@ class AssistantRun:
                     result, ok = self.registry.run(c.name, c.arguments)
                     if ok:
                         sources.append(result)
+                        if "error" not in result:
+                            read_ok.add(c.name)
                     messages.append({"role": "tool", "tool_name": c.name,
                                      "content": json.dumps(result, ensure_ascii=False)})
                     self._step("tool", name=c.name, arguments=c.arguments, ok=ok, result=result)
@@ -193,6 +201,31 @@ class AssistantRun:
                 continue
 
             content = (turn.content or "").strip()
+            missing = [name for name in REQUIRED_READS if name not in read_ok]
+            if content and missing:
+                # Grounding gate: an answer written before reading the incident and its runbook
+                # is a guess, and the number check cannot catch a guess that has no numbers.
+                # Small models asked to "read first" tend to invent an incident id, so the
+                # console does the missing reads itself, with the arguments of the incident it
+                # already loaded, and the model answers again from those tool results.
+                if usage["model_calls"] >= limit:
+                    raise AIError(f"the model answered without calling {', '.join(missing)}")
+                self._step("note", text=f"The model answered before calling {', '.join(missing)}. That answer "
+                                        "was not used: the console read them and asked again.")
+                calls = [(name, self._read_args(name, incident)) for name in missing]
+                messages.append({"role": "assistant", "content": "", "tool_calls": [
+                    {"function": {"name": n, "arguments": a}} for n, a in calls]})
+                for name, args in calls:
+                    result, ok = self.registry.run(name, args)
+                    if ok and "error" not in result:
+                        sources.append(result)
+                        read_ok.add(name)
+                    messages.append({"role": "tool", "tool_name": name,
+                                     "content": json.dumps(result, ensure_ascii=False)})
+                    self._step("tool", name=name, arguments=args, ok=ok, result=result, by="console")
+                messages.append({"role": "user", "content": "Answer now, in the format asked for, using only "
+                                                            "these tool results."})
+                continue
             if self.task == TASK_EXPLAIN and content:
                 self._finish_explain(content, sources)
                 return
@@ -206,6 +239,15 @@ class AssistantRun:
             messages.append({"role": "user", "content": "Answer now, in the format asked for, from the tool results "
                                                         "you already have."})
             self._step("note", text="The answer was empty or not in the format asked for; asked again.")
+
+    def _read_args(self, name: str, incident: Dict[str, Any]) -> Dict[str, Any]:
+        """Arguments for a read the console makes itself, from the incident the code loaded."""
+        if name == "get_incident":
+            return {"incident_id": self.incident_id}
+        args = {"monitor": incident.get("monitor"), "target": incident.get("target")}
+        if name == "get_runbook":
+            args["level"] = incident.get("level")
+        return args
 
     def _finish_explain(self, content: str, sources: List[Any]) -> None:
         self.trace["answer"] = content

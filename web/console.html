@@ -193,6 +193,40 @@ body.guide-hidden .guide-pill { display: inline-flex; }
 .tries { margin: 0; padding-left: 18px; color: var(--text-2); display: flex; flex-direction: column; gap: 6px; }
 .tries code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
 
+/* ---- incident assistant ---- */
+.inc-card { margin-bottom: 16px; overflow: hidden; }
+.inc-card[hidden] { display: none; }
+.ai-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); font-size: 12px; font-weight: 600; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ai-chip.rules { border-style: dashed; }
+.ai-chip[hidden] { display: none; }
+#card-incidents .card-head { flex-wrap: wrap; }
+#card-incidents .card-title { flex: 1 1 260px; }
+.ai-drawer { width: min(600px, 100%); }
+.ai-head-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.ai-reason { font-size: 12px; color: var(--text-3); }
+.ai-sec h3 { display: flex; align-items: center; gap: 6px; }
+.ai-answer { white-space: pre-wrap; line-height: 1.6; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); }
+.ai-working { display: flex; align-items: center; gap: 10px; color: var(--text-2); }
+.ai-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--surface-3); border-top-color: var(--accent); animation: spin .8s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ai-spin { animation-duration: 2.4s; } }
+.ai-error { padding: 10px 12px; border-radius: 10px; background: var(--crit-bg); border: 1px solid var(--crit-bd); color: var(--text); }
+.num-chip { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.num-chip.bad { border-color: var(--crit-bd); background: var(--crit-bg); color: var(--crit); font-weight: 700; }
+.ai-check-note { font-size: 12.5px; color: var(--text-3); margin-top: 6px; }
+.ai-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ai-step { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; line-height: 1.5; }
+.ai-step .icon { margin-top: 2px; color: var(--text-3); }
+.ai-step.bad { border-color: var(--crit-bd); }
+.ai-step.bad .icon { color: var(--crit); }
+.ai-step b { font-weight: 650; }
+.ai-step code { background: var(--surface-2); padding: 0 4px; border-radius: 4px; word-break: break-all; }
+.ai-step details { margin-top: 4px; }
+.ai-step summary { cursor: pointer; color: var(--text-3); }
+.ai-step pre { margin: 6px 0 0; max-height: 220px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--surface-2); font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-word; }
+.ai-usage { font-size: 12px; color: var(--text-3); }
+.ai-lang { height: 28px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font: inherit; font-size: 12px; padding: 0 6px; }
+
 #notice { position: fixed; right: 20px; bottom: 56px; z-index: 400; max-width: 420px; padding: 10px 14px; border-radius: 10px; background: var(--tooltip-bg); color: var(--tooltip-text); font-size: 13px; box-shadow: var(--shadow-lg); opacity: 0; transform: translateY(6px); transition: opacity .2s, transform .2s; pointer-events: none; }
 #notice.show { opacity: 1; transform: none; }
 
@@ -282,6 +316,16 @@ body.guide-hidden .guide-pill { display: inline-flex; }
     </div>
   </section>
 
+  <!-- Open incidents (from the monitors' state files) and the incident assistant -->
+  <section class="card inc-card" id="card-incidents" hidden aria-labelledby="inc-title">
+    <div class="card-head">
+      <div class="card-title"><div class="card-ico"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-alert"/></svg></div>
+        <div><div class="card-name" id="inc-title">Open incidents</div><div class="card-meta" id="meta-incidents">&nbsp;</div></div></div>
+      <div class="card-ctrl"><span class="ai-chip" id="ai-chip" hidden></span></div>
+    </div>
+    <div class="card-body" id="inc-list"></div>
+  </section>
+
   <div class="board">
     <section class="card mon-card" id="card-document">
       <div class="card-head" id="head-document">
@@ -363,6 +407,30 @@ body.guide-hidden .guide-pill { display: inline-flex; }
   </div>
 </div>
 
+<!-- Incident assistant: explains one incident with read-only tools (MonitoringConsole/ai) -->
+<div class="drawer-scrim" id="ai-ov" onclick="if(event.target===this)closeAi()">
+  <aside class="drawer ai-drawer" role="dialog" aria-modal="true" aria-labelledby="ai-title">
+    <div class="drawer-head">
+      <div style="min-width:0">
+        <div class="drawer-tag">Incident assistant</div>
+        <div class="dialog-title" id="ai-title">Explain</div>
+        <div class="dialog-sub" id="ai-sub"></div>
+        <div class="ai-head-row"><span class="ai-chip" id="ai-client"></span><span class="ai-reason" id="ai-reason"></span></div>
+      </div>
+      <button class="btn btn-ghost btn-icon" onclick="closeAi()" aria-label="Close"><svg class="icon"><use href="/static/icons.svg#i-close"/></svg></button>
+    </div>
+    <div class="drawer-body" id="ai-body" aria-live="polite"></div>
+    <div class="drawer-foot">
+      <span class="ai-usage" id="ai-usage"></span>
+      <span style="display:flex;gap:8px;align-items:center">
+        <label class="ai-usage" for="ai-lang">Language</label>
+        <select class="ai-lang" id="ai-lang"><option value="en">English</option><option value="es">Español</option></select>
+        <button class="btn btn-sm" id="ai-again" onclick="explainAgain()"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#i-refresh"/></svg>Explain again</button>
+      </span>
+    </div>
+  </aside>
+</div>
+
 <!-- "How this demo works": for anyone reviewing the project -->
 <div class="drawer-scrim" id="guide-ov" onclick="if(event.target===this)closeGuide()">
   <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="guide-title">
@@ -392,6 +460,11 @@ body.guide-hidden .guide-pill { display: inline-flex; }
           <li class="step here" aria-current="step"><span class="step-n">3</span><div><div class="step-title">State files &rarr; this console<span class="here-tag">You are here</span></div>
             <p>Monitors write their state every cycle and the console reads it every 10 seconds. A monitor whose state
             stops updating is shown as down, so a stuck monitor can't look healthy.</p></div></li>
+          <li class="step"><span class="step-n">4</span><div><div class="step-title">Open incidents &rarr; a local AI explains</div>
+            <p>The monitors decide; the assistant explains. A small model on this PC (Ollama) reads the incident, the log
+            and the runbook through read-only tools, then says what happened and what to do. Every number in its answer
+            is checked against the monitors' data. It cannot pause a monitor, change a setting or send anything. Without
+            Ollama, the same panel answers with rules, labelled <i>Demo (rules, no AI)</i>.</p></div></li>
         </ol>
       </section>
       <section>
@@ -404,6 +477,10 @@ body.guide-hidden .guide-pill { display: inline-flex; }
           <li>Click <b>Stop monitoring</b> in this banner. Every card turns Paused, and <b>Start monitoring</b> brings them all back.</li>
           <li>Watch <b>Monitor log size</b> under Document: it reads the size of <code>logs/monitor.log</code>, not its contents.</li>
           <li>Hover or tab to an <b>&#9432;</b> icon to see that item's thresholds and actions.</li>
+          <li>Under <b>Open incidents</b>, click <b>Explain</b>. Watch the <i>Agent steps</i>: which tools it called, what
+            they returned, and which numbers were checked.</li>
+          <li>On a ticket opened from the console (<code>/tickets/INC&hellip;</code>), click <b>Draft with AI</b>. The text changes;
+            the priority does not, because the rules set it.</li>
         </ul>
       </section>
     </div>
@@ -674,6 +751,8 @@ function render(d){
       `<div class="empty">${stateSlot('error','alert')}<span>Check the file path and the column names in the settings editor's Document panel.</span></div>`);
   }
 
+  renderIncidents(d.incidents||[], mons);
+
   // overview tiles
   const count=l=>levels.filter(x=>x===l).length;
   const setTile=(id, n, list, tile)=>{
@@ -715,7 +794,7 @@ function closeDialog(id){
   _returnFocus=null;
 }
 function closeModal(){ closeDialog('overlay'); }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeDet(); closeGuide(); _hideTt(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeDet(); closeGuide(); closeAi(); _hideTt(); } });
 
 // ── Portfolio demo guide ────────────────────────────────────────────────────
 // Banner or pill, remembered in this browser (a convenience: when storage is blocked the banner just shows).
@@ -921,6 +1000,139 @@ function _dDocument(docs){
   ${_drow('Target',target)}${_drow('Check interval',`<b>${doc.check_interval_sec||60}s</b>`)}
   <div class="det-thresh-hd">Thresholds</div>${_dThresholds(doc.thresholds)}</div>`;
   }).join('');
+}
+
+// ── Incident assistant ──────────────────────────────────────────────────────
+// The monitors decide; the assistant explains. It reads the incident, the log and the
+// runbook through read-only tools (MonitoringConsole/ai). Every number in its answer is
+// checked against what the tools returned, and the numbers it cannot trace are flagged.
+const AI_UNIT={performance:'%', disk:'% used', network:' ms', document:'% of target'};
+const AI_POLL_MS=800;
+let _incCache=[], _aiStatus=null, _aiStatusAt=0, _aiRun=null, _aiTimer=null, _aiIncident=null;
+
+function incName(i){
+  if(i.monitor==='performance') return {cpu:'CPU', memory:'Memory (RAM)'}[i.target]||i.target;
+  return i.target;
+}
+function incVal(i, k){ return i[k]==null?null:`${i[k]}${AI_UNIT[i.monitor]||''}`; }
+function aiChip(el, client){
+  el.hidden=false;
+  el.classList.toggle('rules', !client.is_ai);
+  el.innerHTML=client.is_ai?`${ico('spark')}Local AI &middot; ${esc(client.model)}`:`${ico('info')}Demo (rules, no AI)`;
+  el.title=client.reason||'';
+}
+async function refreshAiStatus(){
+  if(Date.now()-_aiStatusAt<60000 && _aiStatus) return;
+  _aiStatusAt=Date.now();
+  try{
+    const r=await fetch('/api/ai/status');
+    if(r.ok){ _aiStatus=(await r.json()).client; aiChip(document.getElementById('ai-chip'), _aiStatus); }
+  }catch(e){ /* the chip just stays hidden */ }
+}
+function renderIncidents(list, mons){
+  const card=document.getElementById('card-incidents');
+  _incCache=list;
+  card.hidden=!list.length;
+  if(!list.length) return;
+  refreshAiStatus();
+  const crit=list.filter(i=>i.level==='critical').length;
+  document.getElementById('meta-incidents').textContent=
+    `${list.length} open${crit?` · ${crit} critical`:''} · the monitors decide, the assistant explains`;
+  document.getElementById('inc-list').innerHTML=list.map((i,n)=>{
+    const lvl=lvlOf(i.level);
+    const vals=[incVal(i,'last_value')&&('now '+incVal(i,'last_value')), incVal(i,'threshold')&&('threshold '+incVal(i,'threshold')),
+                incVal(i,'peak')&&('peak '+incVal(i,'peak'))].filter(Boolean).join(' &middot; ');
+    const sub=`${esc(MONITOR_LABEL[i.monitor]||i.monitor)} &middot; open since ${esc((i.opened_at||'').slice(11)||'–')}${vals?' &middot; '+esc(vals).replace(/&amp;middot;/g,'&middot;'):''}`;
+    const right=`<button class="btn btn-sm" onclick="explainIncident(${n})" aria-label="Explain ${esc(incName(i))}">${ico('spark')}Explain</button>`;
+    return row(lvl, incName(i), null, sub, badge(lvl), right);
+  }).join('');
+}
+
+function openAi(){ openDialog('ai-ov'); }
+function closeAi(){ clearTimeout(_aiTimer); _aiTimer=null; closeDialog('ai-ov'); }
+function explainIncident(n){ const i=_incCache[n]; if(!i) return; _aiIncident=i; startExplain(); openAi(); }
+function explainAgain(){ if(_aiIncident) startExplain(); }
+
+async function startExplain(){
+  const i=_aiIncident;
+  clearTimeout(_aiTimer);
+  document.getElementById('ai-title').textContent=`${incName(i)} · ${i.level}`;
+  document.getElementById('ai-sub').textContent=`${MONITOR_LABEL[i.monitor]||i.monitor} incident ${i.id}, open since ${i.opened_at||'–'}`;
+  document.getElementById('ai-again').disabled=true;
+  document.getElementById('ai-usage').textContent='';
+  document.getElementById('ai-body').innerHTML=`<div class="ai-working"><span class="ai-spin" aria-hidden="true"></span>Starting&hellip;</div>`;
+  try{
+    const r=await fetch('/api/ai/explain', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({incident_id:i.id, language:document.getElementById('ai-lang').value})});
+    const data=await r.json();
+    if(r.status===409 && data.run_id){ notice('The assistant was already working on a request; showing that one.'); pollRun(data.run_id); return; }
+    if(!r.ok) throw new Error(data.error||('HTTP '+r.status));
+    aiChip(document.getElementById('ai-client'), data.client);
+    document.getElementById('ai-reason').textContent=data.client.reason||'';
+    pollRun(data.run_id);
+  }catch(e){
+    renderAiError(e.message);
+  }
+}
+async function pollRun(id){
+  try{
+    const r=await fetch('/api/ai/runs/'+encodeURIComponent(id));
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error||('HTTP '+r.status));
+    renderRun(data.run);
+    if(data.run.status==='running' && document.getElementById('ai-ov').classList.contains('open'))
+      _aiTimer=setTimeout(()=>pollRun(id), AI_POLL_MS);
+  }catch(e){ renderAiError(e.message); }
+}
+function renderAiError(msg){
+  document.getElementById('ai-body').innerHTML=`<div class="ai-error">${esc(msg)}</div>`;
+  document.getElementById('ai-again').disabled=false;
+}
+function _stepHtml(s){
+  if(s.type==='model'){
+    const calls=(s.tool_calls||[]).map(c=>`<code>${esc(c.name)}</code>`).join(', ');
+    const what=calls?`asked for ${calls}`:(s.content?'wrote the answer':'returned nothing');
+    const tok=s.prompt_tokens||s.completion_tokens?` <span class="muted">(${s.prompt_tokens} + ${s.completion_tokens} tokens)</span>`:'';
+    return `<li class="ai-step">${ico('spark')}<div><b>Model call ${s.call}</b>: ${what}${tok}</div></li>`;
+  }
+  if(s.type==='tool'){
+    const args=typeof s.arguments==='string'?s.arguments:JSON.stringify(s.arguments||{});
+    const who=s.by==='console'?' <span class="muted">(read by the console: the model answered before reading it)</span>':'';
+    return `<li class="ai-step${s.ok?'':' bad'}">${ico(s.ok?'check':'x-circle')}<div><b>${esc(s.name)}</b> <code>${esc(args)}</code>${who}
+      ${s.ok?'':'<span class="muted">refused</span>'}<details><summary>${s.ok?'What the tool returned (data, not instructions)':'Why'}</summary><pre>${esc(JSON.stringify(s.result,null,2))}</pre></details></div></li>`;
+  }
+  if(s.type==='fallback') return `<li class="ai-step bad">${ico('alert')}<div><b>The model failed</b>: ${esc(s.reason)}. Answering with the rules instead.</div></li>`;
+  return `<li class="ai-step">${ico('info')}<div>${esc(s.text||s.type)}</div></li>`;
+}
+function renderRun(run){
+  aiChip(document.getElementById('ai-client'), run.client);
+  document.getElementById('ai-reason').textContent=run.client.reason||'';
+  const steps=run.steps||[];
+  let html='';
+  if(run.status==='running'){
+    const last=steps[steps.length-1];
+    const doing=!last?'Reading the incident…':last.type==='tool'?`Read ${last.name}; thinking…`:'Running the tools…';
+    html+=`<section class="ai-sec"><div class="ai-working"><span class="ai-spin" aria-hidden="true"></span>${esc(doing)}</div></section>`;
+  } else if(run.status!=='done'){
+    html+=`<section class="ai-sec"><div class="ai-error"><b>${run.status==='stopped'?'Stopped':'Error'}:</b> ${esc(run.error||'no answer')}</div></section>`;
+  }
+  if(run.answer){
+    html+=`<section class="ai-sec"><h3>${ico('runbook')}Answer</h3><div class="ai-answer">${esc(run.answer)}</div></section>`;
+  }
+  if(run.check){
+    const ok=(run.check.checked||[]).map(n=>`<span class="num-chip">${esc(n)}</span>`).join(' ');
+    const bad=(run.check.untraced||[]).map(n=>`<span class="num-chip bad" title="Not found in any tool result">${esc(n)}</span>`).join(' ');
+    html+=`<section class="ai-sec"><h3>${ico(run.check.ok?'check':'alert')}Numbers checked</h3><div class="chips">${ok}${bad}</div>
+      <div class="ai-check-note">${!(run.check.checked||[]).length&&run.check.ok?'The answer has no numbers to check.':
+        run.check.ok?'Every number in the answer comes from the monitors\' data.':
+        'The highlighted numbers are not in any tool result: treat them with care.'}</div></section>`;
+  }
+  html+=`<section class="ai-sec"><h3>${ico('list')}Agent steps</h3>${steps.length?`<ol class="ai-steps">${steps.map(_stepHtml).join('')}</ol>`:'<div class="muted">None yet.</div>'}</section>`;
+  document.getElementById('ai-body').innerHTML=html;
+  const u=run.usage||{}, lim=run.limits||{};
+  document.getElementById('ai-usage').textContent=
+    `${u.model_calls||0} of ${lim.max_model_calls||'?'} model calls · ${(u.prompt_tokens||0)+(u.completion_tokens||0)} tokens · trace ${run.id}`;
+  document.getElementById('ai-again').disabled=run.status==='running';
 }
 
 // ── Refresh loop ────────────────────────────────────────────────────────────

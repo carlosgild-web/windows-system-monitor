@@ -85,6 +85,9 @@ class Project:
 
 
 CPU = "performance:cpu:critical"
+# What a well-behaved model does first: read the incident and its runbook (the grounding gate).
+READ = ChatTurn(tool_calls=[ToolCall("get_incident", {"incident_id": CPU}),
+                            ToolCall("get_runbook", {"monitor": "performance", "target": "cpu", "level": "critical"})])
 
 
 class RegistryTests(unittest.TestCase):
@@ -188,7 +191,7 @@ class LoopTests(unittest.TestCase):
 
     def test_ticket_priority_comes_from_the_level_not_the_model(self):
         model = FakeClient([
-            ChatTurn(tool_calls=[ToolCall("get_incident", {"incident_id": CPU})]),
+            READ,
             ChatTurn(content='```json\n{"short_description": "CPU at 97.2", "description": "d", "work_notes": "w",'
                              ' "priority": "5 - Planning", "impact": "3 - Low", "assignment_group": "Nobody"}\n```')])
         trace = self.p.run("ticket", CPU, model)
@@ -199,8 +202,7 @@ class LoopTests(unittest.TestCase):
         self.assertEqual(t["short_description"], "CPU at 97.2")
 
     def test_untraced_numbers_are_flagged(self):
-        model = FakeClient([ChatTurn(tool_calls=[ToolCall("get_incident", {"incident_id": CPU})]),
-                            ChatTurn(content="What happened\n- CPU at 97.2, it will reach 100 in 12 minutes.")])
+        model = FakeClient([READ, ChatTurn(content="What happened\n- CPU at 97.2, it will reach 100 in 12 minutes.")])
         check = self.p.run("explain", CPU, model)["check"]
         self.assertEqual((check["ok"], check["untraced"]), (False, ["100", "12"]))
 
@@ -222,18 +224,46 @@ class LoopTests(unittest.TestCase):
         self.assertTrue(all(c["max_tokens"] <= 1000 for c in heavy.calls))
 
     def test_at_most_four_tool_calls_per_turn(self):
-        many = FakeClient([ChatTurn(tool_calls=[ToolCall("get_incident", {"incident_id": CPU})] * 7),
+        many = FakeClient([ChatTurn(tool_calls=READ.tool_calls + [ToolCall("get_incident", {"incident_id": CPU})] * 5),
                            ChatTurn(content="What happened\n- CPU critical.")])
         trace = self.p.run("explain", CPU, many)
         self.assertEqual(sum(s["type"] == "tool" for s in trace["steps"]), MAX_TOOL_CALLS_PER_TURN)
         self.assertTrue(any("ignored" in s.get("text", "") for s in trace["steps"]))
 
     def test_asks_again_once_for_a_ticket_that_is_not_json(self):
-        model = FakeClient([ChatTurn(content="Sure! Here is the ticket."),
+        model = FakeClient([READ, ChatTurn(content="Sure! Here is the ticket."),
                             ChatTurn(content='{"short_description": "CPU critical", "description": "", "work_notes": ""}')])
         trace = self.p.run("ticket", CPU, model)
-        self.assertEqual(trace["status"], "done")
-        self.assertIn("Answer now", model.calls[1]["messages"][-1]["content"])
+        self.assertEqual((trace["status"], trace["client"]["kind"]), ("done", "fake"))
+        self.assertIn("Answer now", model.calls[2]["messages"][-1]["content"])
+
+    def test_an_answer_before_reading_the_data_is_not_used(self):
+        model = FakeClient([ChatTurn(content="What happened\n- Probably a busy CPU. Restart the PC."),
+                            ChatTurn(content="What happened\n- CPU at 97.2, threshold 95.")])
+        trace = self.p.run("explain", CPU, model)
+        self.assertEqual((trace["status"], trace["client"]["kind"]), ("done", "fake"))
+        self.assertEqual(trace["answer"], "What happened\n- CPU at 97.2, threshold 95.")
+        console_reads = [(s["name"], s["arguments"]) for s in trace["steps"] if s.get("by") == "console"]
+        self.assertEqual(console_reads, [("get_incident", {"incident_id": CPU}),
+                                         ("get_runbook", {"monitor": "performance", "target": "cpu", "level": "critical"})])
+        sent = model.calls[1]["messages"]
+        self.assertEqual([m["role"] for m in sent[-4:]], ["assistant", "tool", "tool", "user"])
+        self.assertTrue(trace["check"]["ok"])
+
+    def test_a_model_that_reads_only_the_incident_gets_the_runbook_read_for_it(self):
+        model = FakeClient([ChatTurn(tool_calls=[ToolCall("get_incident", {"incident_id": CPU})]),
+                            ChatTurn(content="What happened\n- CPU at 97.2."),
+                            ChatTurn(content="What happened\n- CPU at 97.2; runbook step 1.")])
+        trace = self.p.run("explain", CPU, model)
+        self.assertEqual([s["name"] for s in trace["steps"] if s.get("by") == "console"], ["get_runbook"])
+        self.assertIn("runbook step 1", trace["answer"])
+
+    def test_an_ungrounded_answer_on_the_last_call_hands_over_to_the_rules(self):
+        lazy = FakeClient([ChatTurn(content="What happened\n- Something is wrong.")])
+        trace = self.p.run("explain", CPU, lazy, max_model_calls=1)
+        self.assertEqual((trace["status"], trace["client"]["kind"]), ("done", "demo"))
+        self.assertIn("without calling get_incident", trace["client"]["reason"])
+        self.assertIn("99.1", trace["answer"])
 
     def test_a_failing_model_hands_over_to_the_rules(self):
         trace = self.p.run("explain", CPU, FakeClient([AIError("Ollama did not answer within 90 s", retryable=True)]))
@@ -296,7 +326,9 @@ class InjectionTests(unittest.TestCase):
                                  ToolCall("get_runbook", {"monitor": "process", "target": "evil.exe",
                                                           "level": "critical", "run": "stop_monitors"})]),
             ChatTurn(content='{"short_description": "Planned", "description": "x", "work_notes": "y", '
-                             '"priority": "5 - Planning", "urgency": "4 - Low"}')])
+                             '"priority": "5 - Planning", "urgency": "4 - Low"}')] +
+            [ChatTurn(content='{"short_description": "Planned", "description": "x", "work_notes": "y", '
+                              '"priority": "5 - Planning", "urgency": "4 - Low"}')])
         trace = self.p.run("ticket", self.ids[0], obeying)
         self.assertEqual(self.p.snapshot(), before, "no file changed")
         bad = [s for s in trace["steps"] if s["type"] == "tool" and not s["ok"]]

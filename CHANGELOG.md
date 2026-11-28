@@ -34,6 +34,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   otherwise). Every `/api/ai/` route, GETs included, has the same Host/Origin checks as the other POSTs, and the
   POSTs require `Content-Type: application/json`. `/api/status` now lists the open `incidents`, and the console
   serves a monitor's ticket at `/tickets/<number>`. The Docker image includes the assistant (rules only).
+- **Incident assistant in the console.** An *Open incidents* card lists every open incident with an **Explain**
+  button. The panel shows the *Agent steps* as they happen (each tool call and what it returned), the answer, the
+  numbers checked against the monitors' data (untraced ones highlighted), the model calls and tokens used, and who
+  answered: *Local AI* with the model's name, or *Demo (rules, no AI)* with the reason. English or Spanish.
+  Light and dark themes, phone width. The demo guide and `docs/test-environment.md` explain it.
+- **Draft with AI** on the console's copy of a ticket (`/tickets/<number>`): the model writes the short
+  description, description and work notes (also used in the email draft); the priority, impact, urgency and
+  category stay as the rules set them, and the page says so. *Use the original text* undoes it. The `file://`
+  ticket a monitor opens links to the console copy and makes no request itself.
+- Grounding gate: the assistant's answer is only accepted after `get_incident` and `get_runbook` have returned
+  data. When the model answers first (a 4B model sometimes does, or invents an incident id when asked to read),
+  the console makes those two reads itself and asks again; the trace marks them "read by the console".
 - Start / Stop monitoring buttons in the console's demo banner (`POST /api/monitors/start|stop`). They act on all
   five monitors of this install only, matched by full script path; the console and the editor keep running.
 - Document `measure: "file_size"`: watch a file's size in KB, MB or GB against a target. A file that does not exist

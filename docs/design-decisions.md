@@ -129,6 +129,11 @@ The incident assistant (v1.7.0) answers two questions an alert leaves open: *why
 - **Off the monitor loop.** The monitors never wait on the model. The `file://` ticket preview that a monitor
   opens stays rule-based. *Draft with AI* lives in a copy of the same `web/ticket.html` that the console serves
   at `/tickets/<number>`, behind the console's same-origin checks.
+- **No answer before the data.** The number check cannot catch a guess that has no numbers. So the loop
+  accepts an answer only after `get_incident` and `get_runbook` returned data. In testing, qwen3:4b sometimes
+  answered on its first call, and when asked to read first it invented an incident id. Now, when the model answers
+  early, the console makes those reads itself, with the incident it already loaded, and asks again. The trace
+  shows them as "read by the console", so the evaluation still sees what the model did on its own.
 - **Incidents are persisted.** So the assistant can read an incident's start time, sustain and peak,
   `Invoke-ThresholdAlerts` writes the open incidents (`monitor:target:level`) into each state file. Before
   v1.7.0 they lived only in the monitor's memory. Each threshold can also carry an optional `runbook` text, and
