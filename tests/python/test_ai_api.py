@@ -22,6 +22,8 @@ import monitoring_console as mc  # noqa: E402
 from ai import FakeClient, ChatTurn  # noqa: E402
 from ai.factory import ClientChoice  # noqa: E402
 from ai.service import AssistantService  # noqa: E402
+from ai import OllamaError  # noqa: E402
+from ai.factory import choose_client as ai_choose  # noqa: E402
 
 SHIPPED = json.loads((ROOT / "monitoring_settings.json").read_text(encoding="utf-8-sig"))
 CPU = "performance:cpu:critical"
@@ -99,6 +101,56 @@ class ServiceTests(unittest.TestCase):
         (self.tmp / "settings.json").write_text(json.dumps(cfg), encoding="utf-8")
         svc = AssistantService(self.tmp / "settings.json", self.tmp / "logs", demo_mode=True)
         self.assertEqual(svc.status()[1]["client"]["kind"], "demo")
+
+
+class DockerDemoTests(unittest.TestCase):
+    """A7: the Docker demo answers with rules, unless the compose profile "ai" runs Ollama."""
+
+    def options(self, demo_mode, windows, url):
+        with mock.patch.object(mc, "DEMO_MODE", demo_mode), mock.patch.object(mc, "IS_WINDOWS", windows), \
+             mock.patch.object(mc, "DEMO_OLLAMA_URL", url), mock.patch.object(mc, "DEMO_AI_MODEL", "qwen2.5:3b"):
+            return mc.assistant_options()
+
+    def test_windows_uses_the_settings_and_ignores_the_demo_variable(self):
+        self.assertEqual(self.options(False, True, "http://ollama:11434"), {"demo_mode": False})
+
+    def test_the_demo_without_an_ollama_url_uses_rules(self):
+        self.assertEqual(self.options(True, False, ""), {"demo_mode": True})
+
+    def test_the_demo_with_the_ai_profile_points_at_the_container(self):
+        opts = self.options(True, False, "http://ollama:11434")
+        self.assertFalse(opts["demo_mode"])
+        self.assertEqual(opts["ai_overrides"]["ollama_url"], "http://ollama:11434")
+        self.assertIn("--profile ai", opts["unavailable_hint"])
+
+    def test_overrides_reach_the_client_choice_but_not_the_settings_file(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        write_project(tmp)
+        before = (tmp / "settings.json").read_text(encoding="utf-8")
+        seen = {}
+
+        def chooser(settings, demo_mode):
+            seen.update(settings=settings, demo_mode=demo_mode)
+            return ai_choose(settings, demo_mode=demo_mode, probe=lambda c: (_ for _ in ()).throw(
+                OllamaError("Ollama is not reachable at http://ollama:11434: name not resolved", retryable=True)))
+
+        opts = self.options(True, False, "http://ollama:11434")
+        svc = AssistantService(tmp / "settings.json", tmp / "logs", chooser=chooser, **opts)
+        body = svc.status()[1]
+        s = seen["settings"]
+        self.assertEqual((s.enabled, s.ollama_url, s.allow_remote, s.model, seen["demo_mode"]),
+                         (True, "http://ollama:11434", True, "qwen2.5:3b", False))
+        self.assertEqual(body["client"]["kind"], "demo", "no Ollama container: rules")
+        self.assertIn("docker compose --profile ai up", body["client"]["reason"])
+        self.assertEqual((tmp / "settings.json").read_text(encoding="utf-8"), before)
+
+    def test_the_compose_file_keeps_ollama_private(self):
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        ollama = compose.split("  ollama:")[1].split("  ollama-pull:")[0]
+        self.assertNotIn("ports", ollama, "the Ollama container must not publish a port")
+        self.assertIn('profiles: ["ai"]', ollama)
+        self.assertRegex(ollama, r"image: ollama/ollama:\$\{OLLAMA_IMAGE_TAG:-\d+\.\d+\.\d+\}", "a pinned default")
 
 
 class HttpTests(unittest.TestCase):

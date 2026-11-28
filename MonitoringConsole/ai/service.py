@@ -31,10 +31,16 @@ Response = Tuple[int, Dict[str, Any]]
 
 class AssistantService:
     def __init__(self, settings_file: Path, logs_dir: Path, *, demo_mode: bool = False,
-                 chooser: Callable[..., ClientChoice] = choose_client, run_in_thread: bool = True):
+                 chooser: Callable[..., ClientChoice] = choose_client, run_in_thread: bool = True,
+                 ai_overrides: Optional[Dict[str, Any]] = None, unavailable_hint: str = ""):
+        # ai_overrides replace fields of the settings' "ai" section for the assistant only (the
+        # Docker demo's Ollama container, docs/docker.md); the file on disk is not changed.
+        # unavailable_hint is added to the reason when the rules answer instead of the model.
         self.settings_file = Path(settings_file)
         self.logs_dir = Path(logs_dir)
         self.demo_mode = demo_mode
+        self.ai_overrides = dict(ai_overrides or {})
+        self.unavailable_hint = unavailable_hint
         self.chooser = chooser
         self.run_in_thread = run_in_thread
         self._lock = threading.Lock()
@@ -48,7 +54,11 @@ class AssistantService:
             data = json.loads(self.settings_file.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError):
             return {}
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        if self.ai_overrides:
+            data["ai"] = dict(data.get("ai") if isinstance(data.get("ai"), dict) else {}, **self.ai_overrides)
+        return data
 
     def _registry(self) -> ToolRegistry:
         return ToolRegistry(ToolContext(self.logs_dir, self.load_settings))
@@ -58,6 +68,8 @@ class AssistantService:
         if not fresh and cached and cached[1] == settings and time.monotonic() - cached[0] < CHOICE_TTL_SEC:
             return cached[2]
         choice = self.chooser(settings, demo_mode=self.demo_mode)
+        if self.unavailable_hint and not choice.client.is_ai:
+            choice = ClientChoice(choice.client, f"{choice.reason} {self.unavailable_hint}")
         self._choice = (time.monotonic(), settings, choice)
         return choice
 

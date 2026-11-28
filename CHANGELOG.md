@@ -52,6 +52,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   Reports in `docs/eval/`: the rules baseline (19 of 21) and two runs of qwen3:4b on a CPU-only laptop (17 and 16
   of 21), with every failure and what it changed.
 
+- **Docker demo with a local model** (`docker compose --profile ai up`): an `ollama` container (no published port,
+  on the compose network only) and a one-shot `ollama-pull` for the model (`qwen2.5:3b` by default,
+  `DEMO_AI_MODEL` to change it). Without the profile, the demo's assistant answers with rules and says how to turn
+  the model on. `docker/smoke_test.py --ai` checks it; see `docs/docker.md`.
+
 ### Fixed (found by the evaluation)
 - The answer check missed a number at the start of a runbook line (tool results were scanned as JSON text, where
   the new line before it is the two characters `\n`), so a quoted step such as "2." was flagged as untraced.

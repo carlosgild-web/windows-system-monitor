@@ -32,7 +32,10 @@ PERF_STATE_FILE = BASE / "logs" / "performance_state.json"
 DISK_STATE_FILE = BASE / "logs" / "disk_state.json"
 NET_STATE_FILE   = BASE / "logs" / "network_state.json"
 DOC_STATE_FILE   = BASE / "logs" / "document_state.json"
-LOGS_DIR         = BASE / "logs"                 # the assistant reads the state files and the log here
+LOGS_DIR         = BASE / "logs"
+# Docker demo only (docker-compose.yml, profile "ai"): an Ollama container on the compose network.
+DEMO_OLLAMA_URL  = os.environ.get("DEMO_OLLAMA_URL", "").strip()
+DEMO_AI_MODEL    = os.environ.get("DEMO_AI_MODEL", "qwen2.5:3b").strip()                 # the assistant reads the state files and the log here
 TICKET_RE        = re.compile(r"^INC\d{7}$")
 PORT          = 5758
 # Off Windows (the Docker demo) the console is read-only: no tasklist live check, no
@@ -122,8 +125,23 @@ def assistant() -> AssistantService:
     """The incident assistant, created on first use (tests patch SETTINGS_FILE and LOGS_DIR first)."""
     global _assistant
     if _assistant is None or _assistant.settings_file != SETTINGS_FILE or _assistant.logs_dir != LOGS_DIR:
-        _assistant = AssistantService(SETTINGS_FILE, LOGS_DIR, demo_mode=DEMO_MODE or not IS_WINDOWS)
+        _assistant = AssistantService(SETTINGS_FILE, LOGS_DIR, **assistant_options())
     return _assistant
+
+
+def assistant_options() -> dict:
+    """How the assistant runs here. On Windows: from the settings. In the Docker demo: rules, unless
+    DEMO_OLLAMA_URL points at the compose network's Ollama container. That host is another container,
+    not this machine, so allow_remote is set for it; its port is never published (docs/docker.md)."""
+    demo = DEMO_MODE or not IS_WINDOWS
+    if not demo:
+        return {"demo_mode": False}
+    if not DEMO_OLLAMA_URL:
+        return {"demo_mode": True}
+    return {"demo_mode": False,
+            "ai_overrides": {"enabled": True, "ollama_url": DEMO_OLLAMA_URL, "allow_remote": True,
+                             "model": DEMO_AI_MODEL, "fallback_model": None},
+            "unavailable_hint": "To use a local model in the demo: docker compose --profile ai up (docs/docker.md)."}
 
 
 def open_incidents() -> list:

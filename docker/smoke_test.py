@@ -65,7 +65,23 @@ def check(cond, msg):
     print("ok  ", msg)
 
 
+def main_ai():
+    """--ai: the demo started with --profile ai answers with the Ollama container's model."""
+    s = wait_for_status()
+    ai = json.loads(get(CONSOLE + "/api/ai/status")[2])
+    check(ai["client"]["kind"] == "ollama", f"the assistant uses the Ollama container ({ai['client']['reason']})")
+    doc = next(i for i in s["incidents"] if i["monitor"] == "document")
+    run = assistant_run("explain", doc["id"], timeout=600)
+    check(run["status"] == "done" and run["client"]["kind"] == "ollama",
+          f"Explain answered by {run['client']['label']} in {run['usage']['model_calls']} model calls")
+    print(run["answer"])
+    print("PASS: the demo container's assistant runs on a local model")
+    return 0
+
+
 def main():
+    if "--ai" in sys.argv:
+        return main_ai()
     s = wait_for_status()
     check(s["demo_mode"] is True, "demo mode is on")
     check(s["capabilities"] == {"control": False, "open_editor": True}, "console is read-only")
