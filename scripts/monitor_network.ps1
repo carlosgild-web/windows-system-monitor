@@ -15,7 +15,7 @@ function Write-NetStateFile {
         updated     = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
         monitor_pid = $PID
         hosts       = $Hosts
-        incidents   = @($Incidents)      # open incidents (Get-OpenIncidents)
+        incidents   = @($Incidents)      # open incidents (Get-OpenIncident)
     }
     try { $payload | ConvertTo-Json -Depth 5 | Set-Content $stateFile -Encoding UTF8 } catch {}
 }
@@ -169,7 +169,7 @@ while ($true) {
     }
 
     if ($stateChanged -and $hostsOutput.Count -gt 0) {
-        $incidents = @(foreach ($h in $cfg.network) { Get-OpenIncidents $state[$h.name].Trackers "network|$($h.name)" })
+        $incidents = @(foreach ($h in $cfg.network) { Get-OpenIncident $state[$h.name].Trackers "network|$($h.name)" })
         Write-NetStateFile -Cfg $cfg -Hosts $hostsOutput -Incidents $incidents
     }
 

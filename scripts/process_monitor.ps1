@@ -53,7 +53,7 @@ function Write-StateFile ($Processes, $State) {
                     }
                 }
             )
-            # Open incidents, in the same format as the threshold monitors (New-IncidentRecord):
+            # Open incidents, in the same format as the threshold monitors (ConvertTo-IncidentRecord):
             # a required process that is down. Its level is the level of its first action.
             incidents   = @(
                 $Processes | Where-Object { $_.required -and -not $State[$_.name].Running -and $State[$_.name].DownSince } | ForEach-Object {
@@ -61,7 +61,7 @@ function Write-StateFile ($Processes, $State) {
                     $ps    = $State[$proc.name]
                     $first = @($proc.actions.on_not_running | Where-Object { $_ -and $_.level }) | Select-Object -First 1
                     $level = if ($first) { [string]$first.level } else { 'warning' }
-                    New-IncidentRecord -Monitor 'process' -Target $proc.name -Level $level -OpenedAt $ps.DownSince `
+                    ConvertTo-IncidentRecord -Monitor 'process' -Target $proc.name -Level $level -OpenedAt $ps.DownSince `
                         -ExceededSince $ps.DownSince -AlertCount $ps.AlertCount
                 }
             )

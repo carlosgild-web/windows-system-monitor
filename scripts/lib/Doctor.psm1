@@ -571,7 +571,7 @@ function Test-DoctorRuntime ($Config) {
 }
 
 # ---- Incident assistant (Ollama) -------------------------------------------------
-function Get-OllamaModels ([string]$BaseUrl, [int]$TimeoutSec = 3) {
+function Get-OllamaModelList ([string]$BaseUrl, [int]$TimeoutSec = 3) {
     # The model tags Ollama has pulled (GET /api/tags). Throws when Ollama does not answer.
     $resp = Invoke-RestMethod -Uri ($BaseUrl.TrimEnd('/') + '/api/tags') -Method Get -TimeoutSec $TimeoutSec -UseBasicParsing
     return @($resp.models | ForEach-Object { [string]$_.name })
@@ -589,7 +589,7 @@ function Test-DoctorAssistant ($Config) {
         return @(New-DoctorResult $cat 'WARN' 'Ollama reachable' 'Skipped: fix ai.ollama_url first (see Config)')
     }
     $base = $uri.GetLeftPart([UriPartial]::Authority)
-    try { $models = Get-OllamaModels $base }
+    try { $models = Get-OllamaModelList $base }
     catch {
         return @(New-DoctorResult $cat 'WARN' 'Ollama reachable' "No answer from $base ($($_.Exception.Message)). Start Ollama; until then Explain uses the rules, no AI")
     }

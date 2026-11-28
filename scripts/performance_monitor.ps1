@@ -23,8 +23,8 @@ function Write-PerfStateFile {
             }
         }
     )
-    # Open incidents (see Get-OpenIncidents), read by the console's incident assistant.
-    $incidents = @(foreach ($m in $MetricDefs) { Get-OpenIncidents $State[$m.Name].Trackers "performance|$($m.Name)" })
+    # Open incidents (see Get-OpenIncident), read by the console's incident assistant.
+    $incidents = @(foreach ($m in $MetricDefs) { Get-OpenIncident $State[$m.Name].Trackers "performance|$($m.Name)" })
     $payload = [ordered]@{
         updated     = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
         monitor_pid = $PID

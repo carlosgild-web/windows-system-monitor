@@ -14,7 +14,7 @@ What is real and what is simulated:
 - Simulated: CPU and memory (a random walk with occasional spikes), disk usage, public
   host latency, and Notepad, which "closes" for a while every couple of minutes.
 - Every state file lists its open incidents under "incidents", in the monitors' format
-  (New-IncidentRecord in scripts/lib/MonitorActions.ps1). Simplified: an incident is open
+  (ConvertTo-IncidentRecord in scripts/lib/MonitorActions.ps1). Simplified: an incident is open
   while the item's level is not ok, with no sustain or hysteresis.
 """
 import csv

@@ -406,7 +406,7 @@ Describe 'Invoke-ThresholdAlerts' {
     }
 }
 
-Describe 'Open incidents (Get-OpenIncidents)' {
+Describe 'Open incidents (Get-OpenIncident)' {
     BeforeAll {
         function New-Check ([string]$Level, [double]$Pct, $Value, [switch]$Below) {
             $exceeded = if ($null -eq $Value) { $true } elseif ($Below) { $Value -lt $Pct } else { $Value -ge $Pct }
@@ -428,7 +428,7 @@ Describe 'Open incidents (Get-OpenIncidents)' {
 
     It 'lists nothing until sustain_sec has passed' {
         $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 97) -Trackers $tr -Now $t0 -GlobalCfg $g -KeyPrefix 'performance|cpu'
-        @(Get-OpenIncidents $tr 'performance|cpu') | Should -BeNullOrEmpty
+        @(Get-OpenIncident $tr 'performance|cpu') | Should -BeNullOrEmpty
     }
 
     It 'records the start, the sustain, the threshold and the peak of an open incident' {
@@ -436,7 +436,7 @@ Describe 'Open incidents (Get-OpenIncidents)' {
             $v = @{ 0 = 96; 10 = 97; 20 = 96; 30 = 98.5; 40 = 99.1; 50 = 97.2 }[$s]
             $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 $v) -Trackers $tr -Now $t0.AddSeconds($s) -GlobalCfg $g -KeyPrefix 'performance|cpu'
         }
-        $inc = @(Get-OpenIncidents $tr 'performance|cpu')
+        $inc = @(Get-OpenIncident $tr 'performance|cpu')
         $inc.Count             | Should -Be 1
         $inc[0].id             | Should -Be 'performance:cpu:critical'
         $inc[0].monitor        | Should -Be 'performance'
@@ -454,10 +454,10 @@ Describe 'Open incidents (Get-OpenIncidents)' {
         $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 99) -Trackers $tr -Now $t0 -GlobalCfg $g -KeyPrefix 'disk|C:\'
         $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 99) -Trackers $tr -Now $t0.AddSeconds(30) -GlobalCfg $g -KeyPrefix 'disk|C:\'
         $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 50) -Trackers $tr -Now $t0.AddSeconds(40) -GlobalCfg $g -KeyPrefix 'disk|C:\'
-        @(Get-OpenIncidents $tr 'disk|C:\') | Should -BeNullOrEmpty
+        @(Get-OpenIncident $tr 'disk|C:\') | Should -BeNullOrEmpty
         $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 96) -Trackers $tr -Now $t0.AddSeconds(100) -GlobalCfg $g -KeyPrefix 'disk|C:\'
         $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 96) -Trackers $tr -Now $t0.AddSeconds(130) -GlobalCfg $g -KeyPrefix 'disk|C:\'
-        $inc = @(Get-OpenIncidents $tr 'disk|C:\')
+        $inc = @(Get-OpenIncident $tr 'disk|C:\')
         $inc[0].id        | Should -Be 'disk:C:\:critical'
         $inc[0].peak      | Should -Be 96
         $inc[0].opened_at | Should -Be '2026-11-14 10:02:10'
@@ -468,14 +468,14 @@ Describe 'Open incidents (Get-OpenIncidents)' {
             $v = @{ 0 = 70; 30 = 55; 60 = 62 }[$s]
             $null = Invoke-ThresholdAlerts -Checks @(New-Check 'warning' 80 $v -Below) -Trackers $tr -Now $t0.AddSeconds($s) -GlobalCfg $g -KeyPrefix 'document|Sales'
         }
-        @(Get-OpenIncidents $tr 'document|Sales')[0].peak | Should -Be 55
+        @(Get-OpenIncident $tr 'document|Sales')[0].peak | Should -Be 55
     }
 
     It 'keeps a null value (an unreachable host) without a peak' {
         foreach ($s in 0, 30) {
             $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 0 $null) -Trackers $tr -Now $t0.AddSeconds($s) -GlobalCfg $g -KeyPrefix 'network|Internet'
         }
-        $inc = @(Get-OpenIncidents $tr 'network|Internet')[0]
+        $inc = @(Get-OpenIncident $tr 'network|Internet')[0]
         $inc.id         | Should -Be 'network:Internet:critical'
         $inc.peak       | Should -BeNullOrEmpty
         $inc.last_value | Should -BeNullOrEmpty
@@ -485,7 +485,7 @@ Describe 'Open incidents (Get-OpenIncidents)' {
         foreach ($s in 0, 30) {
             $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 97) -Trackers $tr -Now $t0.AddSeconds($s) -GlobalCfg $g -KeyPrefix 'performance|memory'
         }
-        $json = [ordered]@{ incidents = @(Get-OpenIncidents $tr 'performance|memory') } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
+        $json = [ordered]@{ incidents = @(Get-OpenIncident $tr 'performance|memory') } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
         @($json.incidents).Count | Should -Be 1
         $json.incidents[0].level | Should -Be 'critical'
         @($json.incidents[0].PSObject.Properties.Name) | Should -Be @('id', 'monitor', 'target', 'level', 'opened_at', 'exceeded_since',

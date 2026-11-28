@@ -157,29 +157,29 @@ Describe 'Test-DoctorAssistant' {
     }
 
     It 'is OK and asks nothing of Ollama while the assistant is off' {
-        Mock -ModuleName Doctor Get-OllamaModels { throw 'must not be called' }
+        Mock -ModuleName Doctor Get-OllamaModelList { throw 'must not be called' }
         $cfg.ai.enabled = $false
         $r = @(Test-DoctorAssistant $cfg)
         $r.Status | Should -Be 'OK'
-        Should -Invoke -ModuleName Doctor Get-OllamaModels -Times 0 -Exactly
+        Should -Invoke -ModuleName Doctor Get-OllamaModelList -Times 0 -Exactly
     }
 
     It 'is OK when Ollama answers and the model is pulled' {
-        Mock -ModuleName Doctor Get-OllamaModels { @('qwen2.5:3b', 'qwen3:4b-instruct-2507-q4_K_M') }
+        Mock -ModuleName Doctor Get-OllamaModelList { @('qwen2.5:3b', 'qwen3:4b-instruct-2507-q4_K_M') }
         $r = @(Test-DoctorAssistant $cfg)
         $r.Status | Should -Not -Contain 'WARN'
         $r.Check  | Should -Contain 'Model qwen3:4b-instruct-2507-q4_K_M'
     }
 
     It 'warns (never fails) when Ollama does not answer' {
-        Mock -ModuleName Doctor Get-OllamaModels { throw 'connection refused' }
+        Mock -ModuleName Doctor Get-OllamaModelList { throw 'connection refused' }
         $r = @(Test-DoctorAssistant $cfg)
         $r.Status | Should -Be 'WARN'
         $r.Detail | Should -Match 'rules, no AI'
     }
 
     It 'warns and names the fallback when only the fallback model is pulled' {
-        Mock -ModuleName Doctor Get-OllamaModels { @('qwen2.5:3b') }
+        Mock -ModuleName Doctor Get-OllamaModelList { @('qwen2.5:3b') }
         $row = Test-DoctorAssistant $cfg | Where-Object Check -like 'Model *'
         $row.Status | Should -Be 'WARN'
         $row.Detail | Should -Match 'fallback qwen2\.5:3b'
@@ -187,11 +187,11 @@ Describe 'Test-DoctorAssistant' {
     }
 
     It 'never calls a remote Ollama that the config does not allow' {
-        Mock -ModuleName Doctor Get-OllamaModels { @() }
+        Mock -ModuleName Doctor Get-OllamaModelList { @() }
         $cfg.ai.ollama_url = 'http://203.0.113.7:11434'
         $r = @(Test-DoctorAssistant $cfg)
         $r.Status | Should -Be 'WARN'
-        Should -Invoke -ModuleName Doctor Get-OllamaModels -Times 0 -Exactly
+        Should -Invoke -ModuleName Doctor Get-OllamaModelList -Times 0 -Exactly
     }
 }
 

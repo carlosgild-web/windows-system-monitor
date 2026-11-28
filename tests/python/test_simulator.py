@@ -82,7 +82,7 @@ class SimulatorTests(unittest.TestCase):
         self.assertFalse(procs["notepad.exe"]["is_running"])
         self.assertTrue(procs["explorer.exe"]["is_running"] and procs["dwm.exe"]["is_running"])
 
-    # Same fields, same order as New-IncidentRecord in scripts/lib/MonitorActions.ps1.
+    # Same fields, same order as ConvertTo-IncidentRecord in scripts/lib/MonitorActions.ps1.
     INCIDENT_FIELDS = ["id", "monitor", "target", "level", "opened_at", "exceeded_since",
                        "sustain_sec", "threshold", "peak", "last_value", "alert_count"]
 

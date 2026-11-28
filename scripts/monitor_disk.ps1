@@ -15,7 +15,7 @@ function Write-DiskStateFile {
         updated     = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
         monitor_pid = $PID
         drives      = $Drives
-        incidents   = @($Incidents)      # open incidents (Get-OpenIncidents)
+        incidents   = @($Incidents)      # open incidents (Get-OpenIncident)
     }
     try { $payload | ConvertTo-Json -Depth 5 | Set-Content $stateFile -Encoding UTF8 } catch {}
 }
@@ -140,7 +140,7 @@ while ($true) {
     }
 
     if ($stateChanged -and $drivesOutput.Count -gt 0) {
-        $incidents = @(foreach ($d in $cfg.disk) { Get-OpenIncidents $state[$d.drive].Trackers "disk|$($d.drive)" })
+        $incidents = @(foreach ($d in $cfg.disk) { Get-OpenIncident $state[$d.drive].Trackers "disk|$($d.drive)" })
         Write-DiskStateFile -Cfg $cfg -Drives $drivesOutput -Incidents $incidents
     }
 

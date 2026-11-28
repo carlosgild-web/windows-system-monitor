@@ -19,7 +19,7 @@
                               hovering around the threshold is one incident, not many. Only the
                               highest open or exceeded level acts. Each open incident keeps its
                               start time and peak value.
-    - Get-OpenIncidents     : the open incidents of one item, as the records every state file
+    - Get-OpenIncident     : the open incidents of one item, as the records every state file
                               lists under "incidents" (read by the console's incident assistant).
 
     A monitor that shows a console window can set $MonitorActionTrace = $true after
@@ -318,7 +318,7 @@ function Invoke-MonitorActions {
 # ---- Incidents with hysteresis ----------------------------------------------------
 function New-AlertTracker {
     # OpenedAt / ExceededSince / Peak / LastValue / SustainSec describe the open incident
-    # (Get-OpenIncidents); they are cleared when it closes.
+    # (Get-OpenIncident); they are cleared when it closes.
     return @{ AboveSince = $null; ClearSince = $null; Active = $false; AlertCount = 0
               OpenedAt = $null; ExceededSince = $null; Peak = $null; LastValue = $null; SustainSec = 0; Threshold = $null }
 }
@@ -403,7 +403,7 @@ function Invoke-ThresholdAlerts {
     return $top
 }
 
-function New-IncidentRecord {
+function ConvertTo-IncidentRecord {
     # One entry of a state file's "incidents" list. id is "<monitor>:<target>:<level>".
     param([string]$Monitor, [string]$Target, [string]$Level, $OpenedAt, $ExceededSince = $null,
           [double]$SustainSec = 0, $Peak = $null, $LastValue = $null, $Threshold = $null, [int]$AlertCount = 0)
@@ -423,7 +423,7 @@ function New-IncidentRecord {
     }
 }
 
-function Get-OpenIncidents {
+function Get-OpenIncident {
     # The open incidents of one item (its level -> tracker table), lowest level first.
     # KeyPrefix is the same "<monitor>|<target>" given to Invoke-ThresholdAlerts.
     param([hashtable]$Trackers, [string]$KeyPrefix)
@@ -433,7 +433,7 @@ function Get-OpenIncidents {
     foreach ($level in @('warning', 'critical') + @($Trackers.Keys | Where-Object { $_ -notin 'warning', 'critical' })) {
         $tr = $Trackers[$level]
         if ($null -eq $tr -or -not $tr.Active) { continue }
-        $out += New-IncidentRecord -Monitor $monitor -Target $target -Level $level -OpenedAt $tr.OpenedAt `
+        $out += ConvertTo-IncidentRecord -Monitor $monitor -Target $target -Level $level -OpenedAt $tr.OpenedAt `
             -ExceededSince $tr.ExceededSince -SustainSec ([double]$tr.SustainSec) -Peak $tr.Peak `
             -LastValue $tr.LastValue -Threshold $tr.Threshold -AlertCount $tr.AlertCount
     }

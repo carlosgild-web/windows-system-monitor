@@ -8,7 +8,7 @@ then writes the answer from the tool results only. Every number it writes comes 
 a tool result, so the answer check always passes on it.
 
 Tool results it reads (the "content" of role "tool" messages, JSON):
-- get_incident: an incident record (see New-IncidentRecord), or {"error": ...}.
+- get_incident: an incident record (see ConvertTo-IncidentRecord), or {"error": ...}.
 - get_recent_events: {"events": ["log line", ...]}.
 - get_runbook: {"runbook": "1. ...\\n2. ..."} or {"runbook": null}.
 """
