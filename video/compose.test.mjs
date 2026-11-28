@@ -25,6 +25,11 @@ test('waits are shortened to 1 s and say what was waited for and how long', () =
   assert.equal(pieces.filter((p) => p.src === 'clip').length, 1)
 })
 
+test('a two-pass wait is labelled with its first-pass length, even when the replay was short', () => {
+  const pieces = planPieces(30, takeWaits([{ from_ms: 10_000, to_ms: 11_500, what: 'the model', real_s: 41 }]))
+  assert.deepEqual(pieces[1], { src: 'take', from: 10, to: 11, label: 'the model: 41 s in the first pass, replayed in 1 s' })
+})
+
 test('a short wait is kept as it is', () => {
   assert.deepEqual(takeWaits([{ from_ms: 0, to_ms: 2_500, what: 'x' }]), [])
 })

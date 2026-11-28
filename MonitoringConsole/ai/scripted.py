@@ -5,8 +5,8 @@ runner sets it). Everything around the model is real: the tools read the real st
 the grounding gate and the number check run, the trace is real. Only the model's turns are
 fixed, and the UI labels the client "Scripted replay (no AI)".
 
-Script format:
-    {"delay_sec": 1.5,
+Script format (label, model and reason are optional; the video's two-pass recording sets them):
+    {"delay_sec": 1.5, "label": "...", "model": "...", "reason": "...",
      "explain": [{"tool_calls": [{"name": "get_incident", "arguments": {...}}]}, {"content": "..."}],
      "ticket":  [...]}
 Turn n of a run is the n-th model call, counted from the assistant messages already sent.
@@ -32,10 +32,13 @@ class ScriptedClient(ChatClient):
         except (OSError, ValueError) as exc:
             raise AIError(f"the GIF script could not be read: {exc}") from None
         self.delay = float(self.script.get("delay_sec", 0))
+        self.model = str(self.script.get("model") or self.model)
+        self._label = str(self.script.get("label") or "Scripted replay (no AI)")
+        self.reason = str(self.script.get("reason") or "")
 
     @property
     def label(self) -> str:
-        return "Scripted replay (no AI)"
+        return self._label
 
     def chat(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], *,
              max_tokens: int = 1024) -> ChatTurn:

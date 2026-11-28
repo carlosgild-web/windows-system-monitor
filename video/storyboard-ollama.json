@@ -87,7 +87,8 @@
    "layer": "Tools",
    "on": {
     "event": "tool",
-    "name": "get_incident"
+    "name": "get_incident",
+    "task": "explain"
    },
    "subtitle": "It reads the incident: the value, the threshold, since when, and whether the monitor is alive.",
    "payload": {
@@ -107,7 +108,8 @@
    "layer": "Tools",
    "on": {
     "event": "tool",
-    "name": "get_runbook"
+    "name": "get_runbook",
+    "task": "explain"
    },
    "subtitle": "Then the runbook the operator wrote for this alert.",
    "payload": {
@@ -127,7 +129,8 @@
    "layer": "Tools",
    "on": {
     "event": "tool",
-    "name": "get_recent_events"
+    "name": "get_recent_events",
+    "task": "explain"
    },
    "subtitle": "And the latest log lines about this item.",
    "payload": {

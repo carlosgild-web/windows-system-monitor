@@ -140,8 +140,11 @@ def assistant_options() -> dict:
         from ai.scripted import ScriptedClient
         reason = "Scripted replay for the README GIF: the tools, data and checks are real; the model's turns are fixed."
         script = Path(AI_SCRIPT)            # bound now, not when the lambda runs
-        return {"demo_mode": False,
-                "chooser": lambda settings, demo_mode: ClientChoice(ScriptedClient(script), reason)}
+
+        def chooser(settings, demo_mode):
+            client = ScriptedClient(script)
+            return ClientChoice(client, client.reason or reason)
+        return {"demo_mode": False, "chooser": chooser}
     demo = DEMO_MODE or not IS_WINDOWS
     if not demo:
         return {"demo_mode": False}

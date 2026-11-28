@@ -15,6 +15,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   (`MonitoringConsole/ai/scripted.py`, used only when `WSM_AI_SCRIPT` is set, labelled *Scripted replay (no AI)*);
   the tools' results, the number check and the ticket fields are real.
 
+- **The README video** (`docs/video.md`, 1:51): the real console and `qwen3:4b-instruct` on Ollama, with an
+  "Under the hood" panel; recorded in two passes (`video/pass1.mjs`, then the take replays the model's turns and
+  must match them). Tooling in `video/` (dev-only), ported from hl-bead-studio: storyboard, recorder, payload
+  checks, labelled wait cuts. Poster, subtitles and a new social preview in `docs/showcase/`.
+
 ### Fixed
 - *Open incidents* shows each item once, at its highest open level (a warning stays open under a critical one).
 - *Draft with AI*: the ticket's Description no longer repeats the work notes (the email still carries both).

@@ -1,0 +1,63 @@
+1
+00:00:00,143 --> 00:00:06,278
+Windows System Monitor: the monitors decide; a small model on this PC explains.
+
+2
+00:00:06,278 --> 00:00:12,089
+One JSON file is the source of truth: what to watch, the thresholds, the actions and the runbooks.
+
+3
+00:00:12,089 --> 00:00:17,353
+Five monitors run on their own and write state files; the console only reads them.
+
+4
+00:00:17,353 --> 00:00:19,396
+The recorder closes Notepad. The process monitor notices on its next check.
+
+5
+00:00:19,396 --> 00:00:28,126
+One incident opens, with its start time and level: one incident, not a stream of alerts.
+
+6
+00:00:28,126 --> 00:00:34,438
+Explain the critical one: a small model on this PC, with four tools that can only read.
+
+7
+00:00:34,438 --> 00:00:40,510
+The model answered before reading, so the console read the data and asked again: no guess gets through.
+
+8
+00:00:40,510 --> 00:00:47,849
+It reads the incident: the value, the threshold, since when, and whether the monitor is alive.
+
+9
+00:00:47,849 --> 00:00:54,175
+Then the runbook the operator wrote for this alert.
+
+10
+00:00:54,175 --> 00:01:05,374
+Every number in the answer is checked against what the tools returned.
+
+11
+00:01:05,374 --> 00:01:11,094
+The same budget alert opened a ticket. Its priority comes from the rules.
+
+12
+00:01:11,094 --> 00:01:18,439
+Draft with AI: the model writes the description and the work notes.
+
+13
+00:01:18,439 --> 00:01:29,055
+The model writes the text; the code sets the priority, impact and urgency.
+
+14
+00:01:29,055 --> 00:01:33,972
+The email is only a draft: nothing is sent until you open it in your mail app.
+
+15
+00:01:33,972 --> 00:01:39,636
+Monitor data is data, never instructions: 21 scenarios, injection included, failures published.
+
+16
+00:01:39,636 --> 00:01:45,248
+Windows System Monitor. The monitors decide; the AI explains.

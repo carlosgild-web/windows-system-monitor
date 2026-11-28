@@ -171,6 +171,21 @@ ticket fields, no side effects, injection. The model's own misses (a left-out th
 English for a Spanish request) moved between runs. The evaluation also found four things to fix in the code,
 among them a bug in the number check. The reports and what changed are in [docs/eval/](eval/README.md).
 
+## 13. The video: a real model, recorded in two passes
+
+The README video ([docs/video.md](video.md)) shows the real console and a real local model, with
+an "Under the hood" panel of the code and the data behind each step. Its tooling is ported from
+hl-bead-studio (`video/`). Every payload on screen is checked against what the console's API
+returned during the take, and every wait is labelled with its real length.
+
+On the 7.2 GB laptop it was recorded on, the model and the recording browser did not fit in memory
+together. So it is recorded in two passes, as luna-hybrid-agent's video is: the model runs alone
+first (`video/pass1.mjs`), then the console replays its turns while the take is recorded, and the
+take must match the first pass turn for turn. A run whose text quotes a clock time cannot be
+replayed truthfully and is run again; the evaluation (section 12) remains the unfiltered measure
+of the model. The replay client (`MonitoringConsole/ai/scripted.py`) is used only when the
+console starts with `WSM_AI_SCRIPT`, and the UI labels it as a replay.
+
 ## Known limitations
 
 - **Windows-only by design.** The Docker image is a demo with simulated monitors; see section 9.

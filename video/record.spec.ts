@@ -5,7 +5,8 @@
  *
  *   npm run video:smoke    the stage layout at 1920x1080 (~1 min with the start-up)
  *   npm run video:dry      the whole take on the scripted model (script-dry.json): strict mode
- *   npm run video:ollama   the take on the real local model (Ollama): the published video
+ *   npm run video:ollama   the published video, in two passes (B5 F7): `node pass1.mjs` runs the real
+ *                          model alone; this take replays its turns and must match them exactly
  *
  * Capture: the console is not changed. The recorder routes POST /api/ai/explain and
  * /api/ai/ticket-draft (to learn the run id) and reads GET /api/status and GET
@@ -188,7 +189,7 @@ async function openIncidents(api: APIRequestContext) {
 }
 
 /** Runs one assistant task by clicking in the console, and captures the run's steps as they come. */
-async function followRun(cond: Conductor, page: Page, api: APIRequestContext, task: 'explain' | 'ticket', click: () => Promise<void>, allowGeneric: boolean) {
+async function followRun(cond: Conductor, page: Page, api: APIRequestContext, task: 'explain' | 'ticket', click: () => Promise<void>, allowGeneric: boolean, realSeconds: number[] = []) {
   const route = task === 'explain' ? '**/api/ai/explain' : '**/api/ai/ticket-draft'
   let runId = ''
   await page.context().route(route, async (r) => {
@@ -201,14 +202,24 @@ async function followRun(cond: Conductor, page: Page, api: APIRequestContext, ta
   await page.context().unroute(route)
   await cond.onEvent(cond.capture('request', { task, run_id: runId }, task), false)
   let seen = 0
+  let modelCall = 0
+  let mark = cond.now() // the end of the last thing shown: a wait never covers a row
   const deadline = Date.now() + RUN_TIMEOUT_MS
   let run: any
   for (;;) {
     run = (await (await api.get(`/api/ai/runs/${runId}`)).json()).run
     for (const step of run.steps.slice(seen)) {
       seen++
+      if (step.type === 'model' && realSeconds[modelCall] != null) {
+        // The replay answers at once; hold 1.5 s so the label with the first pass's real length shows.
+        const from = cond.now()
+        await sleep(1500)
+        cond.waits.push({ from_ms: from, to_ms: cond.now(), what: `${task === 'explain' ? 'Explain' : 'Draft'}: the model's call ${modelCall + 1}`, real_s: realSeconds[modelCall] } as any)
+      }
+      if (step.type === 'model') modelCall++
       if (step.type === 'tool') await cond.onEvent(cond.capture('tool', step, task), allowGeneric && task === 'explain')
       else if (step.type === 'note' && /answered before calling/.test(step.text)) await cond.onEvent(cond.capture('gate', step, task), false)
+      mark = cond.now()
     }
     if (run.status !== 'running') break
     if (Date.now() > deadline) throw new Error(`the ${task} run did not finish`)
@@ -286,16 +297,20 @@ for (const [kind, tag] of [['dry', '@dry'], ['ollama', '@ollama']] as const)
     const board = loadBoard()
     const strict = kind === 'dry'
     if (strict) board.mode = 'strict'
+    const pass1File = join(outDir, 'script-pass1.json')
+    if (!strict && !existsSync(pass1File)) throw new Error('Run the first pass first: node pass1.mjs')
+    const pass1 = strict ? null : JSON.parse(readFileSync(pass1File, 'utf8'))
     const notepad = await startNotepad()
-    await startEnv({ script: strict ? join(HERE, 'script-dry.json') : '', model: process.env.VIDEO_MODEL ?? '' })
+    await startEnv({ script: strict ? join(HERE, 'script-dry.json') : pass1File })
     try {
       makeBudgetCritical()
       const ai = (await (await request.get('/api/ai/status')).json()).client
-      if (!strict && ai.kind !== 'ollama') throw new Error(`the real take needs Ollama: ${ai.reason}`)
+      if (ai.kind !== 'scripted') throw new Error(`the take replays a script: ${ai.reason}`)
       const { page, app, t0 } = await openStage(browser, outDir)
       const cond = new Conductor(page, board, t0)
-      const banner = strict ? 'Dry take: scripted model (no AI)' : board.banner.replace('{model}', ai.model)
-      await page.evaluate((b) => (window as any).stage.init(b), { banner, provider: strict ? 'tools, data and checks are real' : 'nothing leaves this PC' })
+      const banner = strict ? 'Dry take: scripted model (no AI)' : board.banner.replace('{model}', pass1.model)
+      await page.evaluate((b) => (window as any).stage.init(b), {
+        banner, provider: strict ? 'tools, data and checks are real' : 'recorded in two passes: the model ran alone first' })
 
       // 0-1: the hook, the console and the config, the pieces.
       await cond.show('0.1')
@@ -324,7 +339,7 @@ for (const [kind, tag] of [['dry', '@dry'], ['ollama', '@ollama']] as const)
       await app.locator('body').evaluate(() => (window as any).fetchStatus())
       const row = app.locator('#inc-list .row', { hasText: 'Groceries spend' })
       await row.getByRole('button', { name: /Explain/ }).hover()
-      await followRun(cond, page, request, 'explain', () => row.getByRole('button', { name: /Explain/ }).click(), !strict)
+      await followRun(cond, page, request, 'explain', () => row.getByRole('button', { name: /Explain/ }).click(), !strict, pass1?.seconds?.explain)
       await expect(app.locator('#ai-body .ai-answer')).toBeVisible()
       await sleep(2500)
       await app.locator('#ai-body').evaluate((el) => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }))
@@ -340,7 +355,7 @@ for (const [kind, tag] of [['dry', '@dry'], ['ollama', '@ollama']] as const)
       await loadApp(page, `/tickets/${TICKET}`)
       await cond.show('4.1')
       await app.locator('#ai-draft').hover()
-      await followRun(cond, page, request, 'ticket', () => app.locator('#ai-draft').click(), false)
+      await followRun(cond, page, request, 'ticket', () => app.locator('#ai-draft').click(), false, pass1?.seconds?.ticket)
       await expect(app.locator('#ai-bar .ai-tag')).toBeVisible()
       await sleep(2500)
       await app.locator('#t-work-sec').scrollIntoViewIfNeeded()
@@ -355,7 +370,26 @@ for (const [kind, tag] of [['dry', '@dry'], ['ollama', '@ollama']] as const)
       await sleep(1500)
 
       const posterMs = cond.shown.find((s) => s.id === '3.6')?.t_ms ?? cond.now() / 2
-      await saveTake(cond, page, outDir, { mode: board.mode, banner, poster_ms: posterMs })
+      // Two-pass honesty (B5 F7): every model turn, the answer and the ticket equal the first pass.
+      const mismatch: string[] = []
+      const checkNotes: string[] = []
+      if (!strict) {
+        const turns = (r: any) => r.steps.filter((x: any) => x.type === 'model').map((x: any) => [x.tool_calls, x.content])
+        for (const task of ['explain', 'ticket']) {
+          const first = JSON.parse(readFileSync(join(outDir, `pass1-${task}.json`), 'utf8'))
+          const take = cond.runs[task]
+          if (JSON.stringify(turns(take)) !== JSON.stringify(turns(first))) mismatch.push(`${task}: model turns`)
+          if (JSON.stringify(take.answer) !== JSON.stringify(first.answer)) mismatch.push(`${task}: answer`)
+          if (JSON.stringify(take.ticket) !== JSON.stringify(first.ticket)) mismatch.push(`${task}: ticket`)
+          // The live check runs on the take's own data: it must be fully traced (no red chip on
+          // screen). A difference from the first pass's check is recorded, not failed (F8).
+          if (!take.check?.ok) mismatch.push(`${task}: the take's number check flags ${take.check?.untraced}`)
+          if (JSON.stringify(take.check) !== JSON.stringify(first.check)) checkNotes.push(`${task}: first pass ${JSON.stringify(first.check.checked)}, take ${JSON.stringify(take.check.checked)}`)
+        }
+      }
+      await saveTake(cond, page, outDir, { mode: board.mode, banner, poster_ms: posterMs,
+        two_pass: strict ? null : { model: pass1.model, warmup_s: pass1.warmup_s, seconds: pass1.seconds, matches_first_pass: mismatch.length === 0, mismatch, check_notes: checkNotes, tries: pass1.tries } })
+      if (mismatch.length) throw new Error(`the take differs from the first pass: ${mismatch.join(', ')}`)
       for (const run of Object.values(cond.runs)) {
         if (existsSync(traceFile(run.id))) copyFileSync(traceFile(run.id), join(outDir, `trace-file-${run.task}.json`))
       }

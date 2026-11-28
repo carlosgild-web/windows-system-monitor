@@ -78,11 +78,13 @@ export function findGaps(events, shown) {
   return gaps
 }
 
-/** The waits the take wrote (`{ from_ms, to_ms, what }`), over GAP_S, as gaps. */
+/** The waits the take wrote (`{ from_ms, to_ms, what, real_s? }`), over GAP_S, as gaps. A wait
+ * with `real_s` (a two-pass take: the model ran in the first pass) is always labelled, with that
+ * length, even when the replay itself was short. */
 export function takeWaits(waits) {
   return waits
-    .filter((w) => w.to_ms - w.from_ms > GAP_S * 1000)
-    .map((w) => ({ from: w.from_ms / 1000, to: w.to_ms / 1000, what: w.what }))
+    .filter((w) => w.real_s != null || w.to_ms - w.from_ms > GAP_S * 1000)
+    .map((w) => ({ from: w.from_ms / 1000, to: w.to_ms / 1000, what: w.what, ...(w.real_s != null ? { real: w.real_s } : {}) }))
 }
 
 /**
@@ -100,9 +102,12 @@ export function planPieces(takeS, gaps, clips = []) {
     if (cut.from < pos) continue // overlaps an earlier cut
     if (cut.from > pos) pieces.push({ src: 'take', from: pos, to: cut.from })
     if (cut.kind === 'gap') {
-      const waited = cut.to - cut.from
+      const waited = cut.real ?? cut.to - cut.from
       const what = cut.what ?? 'waiting for the model'
-      pieces.push({ src: 'take', from: cut.from, to: cut.from + KEEP_S, label: `${what}: ${waited.toFixed(0)} s, shortened to ${KEEP_S} s` })
+      const keep = Math.min(KEEP_S, cut.to - cut.from)
+      const label = cut.real != null ? `${what}: ${waited.toFixed(0)} s in the first pass, replayed in ${keep.toFixed(0)} s`
+        : `${what}: ${waited.toFixed(0)} s, shortened to ${KEEP_S} s`
+      pieces.push({ src: 'take', from: cut.from, to: cut.from + keep, label })
     } else {
       pieces.push({ src: 'clip', clip: cut.clip, from: cut.from, to: cut.to })
     }
@@ -223,6 +228,7 @@ function main() {
   const lengths = []
   const next = () => `part-${String(files.length + 1).padStart(2, '0')}.mp4`
   for (const [i, p] of pieces.entries()) {
+    if (p.src === 'take' && p.to - p.from < 0.2) { lengths.push(0); continue } // too short to encode
     if (p.src === 'take') {
       const file = next()
       let vf = 'fps=30,format=yuv420p,setsar=1'
