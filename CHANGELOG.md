@@ -22,6 +22,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   times out every call), `DemoClient` (rules and templates, no model, labelled "Demo (rules, no AI)"),
   `FakeClient` (scripted, for tests), and `choose_client`: the configured model, else the fallback model, else
   the rules, with the reason.
+- The assistant's agent loop (`ai/agent.py`): four read-only tools (`get_incident`, `get_recent_events`,
+  `get_runbook`, `get_monitor_config`, with e-mail addresses redacted) behind a registry that validates every
+  argument; at most `ai.max_model_calls` calls, the last one without tools; a token budget; at most four tool calls
+  per turn; a number check on the answer; the ticket's priority, impact, urgency, severity, category and group set
+  by code; a hand-over to the rules when the model fails; a JSON trace per run in `logs/ai_traces/` (rotated).
+  Tested against prompt injection through a process name, a document name and a log line.
 - Start / Stop monitoring buttons in the console's demo banner (`POST /api/monitors/start|stop`). They act on all
   five monitors of this install only, matched by full script path; the console and the editor keep running.
 - Document `measure: "file_size"`: watch a file's size in KB, MB or GB against a target. A file that does not exist

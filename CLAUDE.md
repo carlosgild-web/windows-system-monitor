@@ -104,6 +104,13 @@ file). APIs: `POST /api/ai/explain`, `POST /api/ai/ticket-draft`, `GET /api/ai/r
 *Draft with AI* is on the console-served `/tickets/<number>`. The `file://` preview a monitor opens stays rule-based.
 Design: `docs/design-decisions.md` sections 10-12.
 
+Modules: `base.py` (the `ChatClient` interface; the first user message is `task_message()`, which `DemoClient`
+parses), `settings.py`, `ollama.py`, `demo.py`, `fake.py`, `factory.py` (`choose_client`: model, else fallback, else
+rules), `tools.py` (the four `get_*` tools and `ToolRegistry`, which validates every argument), `agent.py` (the
+loop), `check.py` (the number check), `ticket.py` (the code-owned ticket fields; same table as `web/ticket.html`, a
+test keeps them equal), `trace.py`. `DemoClient` depends on the tool names, arguments and result shapes: change
+them together. `tools.py` must not import anything that writes, spawns or connects (a test greps for it).
+
 **Invariants (each has a test):**
 1. The AI explains. Thresholds, levels, priorities, impact, urgency, category and actions come from the config and
    the monitors.
