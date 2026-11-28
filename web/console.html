@@ -1018,7 +1018,7 @@ function incVal(i, k){ return i[k]==null?null:`${i[k]}${AI_UNIT[i.monitor]||''}`
 function aiChip(el, client){
   el.hidden=false;
   el.classList.toggle('rules', !client.is_ai);
-  el.innerHTML=client.is_ai?`${ico('spark')}Local AI &middot; ${esc(client.model)}`:`${ico('info')}Demo (rules, no AI)`;
+  el.innerHTML=client.is_ai?`${ico('spark')}Local AI &middot; ${esc(client.model)}`:`${ico('info')}${esc(client.label||'Demo (rules, no AI)')}`;
   el.title=client.reason||'';
 }
 async function refreshAiStatus(){
@@ -1029,8 +1029,13 @@ async function refreshAiStatus(){
     if(r.ok){ _aiStatus=(await r.json()).client; aiChip(document.getElementById('ai-chip'), _aiStatus); }
   }catch(e){ /* the chip just stays hidden */ }
 }
-function renderIncidents(list, mons){
+function renderIncidents(all, mons){
   const card=document.getElementById('card-incidents');
+  // A lower level stays open under a higher one (the monitors' hysteresis): show each item once,
+  // at its highest open level.
+  const rank=l=>l==='critical'?2:l==='warning'?1:0, top={};
+  all.forEach(i=>{ const k=i.monitor+'\u0000'+i.target; if(!top[k]||rank(i.level)>rank(top[k].level)) top[k]=i; });
+  const list=all.filter(i=>top[i.monitor+'\u0000'+i.target]===i);
   _incCache=list;
   card.hidden=!list.length;
   if(!list.length) return;

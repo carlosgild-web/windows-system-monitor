@@ -1,0 +1,62 @@
+{
+ "_comment": "The dry take's model turns (MonitoringConsole/ai/scripted.py). The tools' results, the checks and the ticket fields are real. Numbers here must appear in the tool results.",
+ "delay_sec": 1.5,
+ "explain": [
+  {
+   "tool_calls": [
+    {
+     "name": "get_incident",
+     "arguments": {
+      "incident_id": "document:Groceries spend (monthly budget):critical"
+     }
+    }
+   ]
+  },
+  {
+   "tool_calls": [
+    {
+     "name": "get_runbook",
+     "arguments": {
+      "monitor": "document",
+      "target": "Groceries spend (monthly budget)",
+      "level": "critical"
+     }
+    },
+    {
+     "name": "get_recent_events",
+     "arguments": {
+      "monitor": "document",
+      "target": "Groceries spend (monthly budget)",
+      "limit": 5
+     }
+    }
+   ]
+  },
+  {
+   "content": "What happened\n- Groceries spend is $408.15, 102% of the $400 monthly target: past the 100% critical threshold.\n\nLikely causes\n- New grocery rows this month, or a row entered twice.\n\nNext steps (from the runbook)\n- Open the budget CSV and sort the Groceries rows by Amount.\n- Check for duplicated or misfiled rows before treating it as overspend.\n- If the total is right, tell the budget owner how far over the target it is."
+  }
+ ],
+ "ticket": [
+  {
+   "tool_calls": [
+    {
+     "name": "get_incident",
+     "arguments": {
+      "incident_id": "document:Groceries spend (monthly budget):critical"
+     }
+    },
+    {
+     "name": "get_runbook",
+     "arguments": {
+      "monitor": "document",
+      "target": "Groceries spend (monthly budget)",
+      "level": "critical"
+     }
+    }
+   ]
+  },
+  {
+   "content": "{\"short_description\": \"Groceries spend at 102% of the $400 monthly budget\", \"description\": \"The Groceries rows of the monthly budget CSV add up to $408.15, 102% of the $400 target and past the 100% critical threshold.\", \"work_notes\": \"From the runbook:\\n1. Open the budget CSV and sort the Groceries rows by Amount.\\n2. Check for duplicated or misfiled rows before treating it as overspend.\\n3. If the total is right, tell the budget owner how far over the target it is.\"}"
+  }
+ ]
+}

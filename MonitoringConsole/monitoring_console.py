@@ -35,7 +35,9 @@ DOC_STATE_FILE   = BASE / "logs" / "document_state.json"
 LOGS_DIR         = BASE / "logs"
 # Docker demo only (docker-compose.yml, profile "ai"): an Ollama container on the compose network.
 DEMO_OLLAMA_URL  = os.environ.get("DEMO_OLLAMA_URL", "").strip()
-DEMO_AI_MODEL    = os.environ.get("DEMO_AI_MODEL", "qwen2.5:3b").strip()                 # the assistant reads the state files and the log here
+DEMO_AI_MODEL    = os.environ.get("DEMO_AI_MODEL", "qwen2.5:3b").strip()
+# README GIF only (e2e/showcase/): a fixed model script replayed by ai/scripted.py, labelled as such.
+AI_SCRIPT        = os.environ.get("WSM_AI_SCRIPT", "").strip()                 # the assistant reads the state files and the log here
 TICKET_RE        = re.compile(r"^INC\d{7}$")
 PORT          = 5758
 # Off Windows (the Docker demo) the console is read-only: no tasklist live check, no
@@ -133,6 +135,16 @@ def assistant_options() -> dict:
     """How the assistant runs here. On Windows: from the settings. In the Docker demo: rules, unless
     DEMO_OLLAMA_URL points at the compose network's Ollama container. That host is another container,
     not this machine, so allow_remote is set for it; its port is never published (docs/docker.md)."""
+    if AI_SCRIPT:
+        from ai.factory import ClientChoice
+        from ai.scripted import ScriptedClient
+        reason = "Scripted replay for the README GIF: the tools, data and checks are real; the model's turns are fixed."
+        script = Path(AI_SCRIPT)            # bound now, not when the lambda runs
+
+        def chooser(settings, demo_mode):
+            client = ScriptedClient(script)
+            return ClientChoice(client, client.reason or reason)
+        return {"demo_mode": False, "chooser": chooser}
     demo = DEMO_MODE or not IS_WINDOWS
     if not demo:
         return {"demo_mode": False}

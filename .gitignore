@@ -20,3 +20,10 @@ pester-results.xml
 
 # Raw image downloads (Gemini); prepared images are committed. See docs/images.md
 art/raw/
+
+# Showcase tooling (dev-only, e2e/showcase and video): Node packages and recordings in progress
+node_modules/
+e2e/showcase/test-results/
+docs/showcase/.gif-video/
+docs/showcase/*.webm
+video/out/

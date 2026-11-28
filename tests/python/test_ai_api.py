@@ -153,6 +153,41 @@ class DockerDemoTests(unittest.TestCase):
         self.assertRegex(ollama, r"image: ollama/ollama:\$\{OLLAMA_IMAGE_TAG:-\d+\.\d+\.\d+\}", "a pinned default")
 
 
+class ScriptedReplayTests(unittest.TestCase):
+    """The README GIF's scripted model: real tools and checks, fixed model turns, labelled."""
+
+    def test_replays_the_script_through_the_real_loop(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        write_project(tmp)
+        script = tmp / "script.json"
+        script.write_text(json.dumps({"explain": [
+            {"tool_calls": [{"name": "get_incident", "arguments": {"incident_id": CPU}},
+                            {"name": "get_runbook", "arguments": {"monitor": "performance", "target": "cpu",
+                                                                  "level": "critical"}}]},
+            {"content": "What happened\n- CPU at 97.2%, above 95%."}]}), encoding="utf-8")
+        with mock.patch.object(mc, "AI_SCRIPT", str(script)):
+            opts = mc.assistant_options()
+        svc = AssistantService(tmp / "settings.json", tmp / "logs", run_in_thread=False, **opts)
+        status, body = svc.start("explain", {"incident_id": CPU})
+        run = svc.get_run(body["run_id"])[1]["run"]
+        self.assertEqual((run["status"], run["client"]["kind"], run["client"]["label"]),
+                         ("done", "scripted", "Scripted replay (no AI)"))
+        self.assertIn("fixed", run["client"]["reason"])
+        self.assertTrue(run["check"]["ok"])
+        self.assertEqual([s["name"] for s in run["steps"] if s["type"] == "tool"], ["get_incident", "get_runbook"])
+        # The script has no ticket turns: the run ends with an error that says so; nothing is made up.
+        status, body = svc.start("ticket", {"incident_id": CPU})
+        run = svc.get_run(body["run_id"])[1]["run"]
+        self.assertEqual((run["status"], run["client"]["kind"], run["ticket"]), ("error", "scripted", None))
+        self.assertIn("no more turns", run["error"])
+
+    def test_not_used_unless_the_showcase_sets_it(self):
+        with mock.patch.object(mc, "AI_SCRIPT", ""), mock.patch.object(mc, "DEMO_MODE", False), \
+             mock.patch.object(mc, "IS_WINDOWS", True):
+            self.assertEqual(mc.assistant_options(), {"demo_mode": False})
+
+
 class HttpTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
