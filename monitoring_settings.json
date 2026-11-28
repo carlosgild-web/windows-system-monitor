@@ -1,7 +1,7 @@
 {
   "_meta": {
     "version": "1.7.0",
-    "last_updated": "2026-11-14",
+    "last_updated": "2026-11-28",
     "description": "Default test environment: one or more monitors per category for things every Windows 10/11 PC has, plus demo toggles (Notepad, the settings editor, the budget CSV, the monitor log size). See docs/test-environment.md.",
     "update_notes": "Bump version and update last_updated whenever you change this file."
   },
@@ -13,6 +13,18 @@
     "email_sender": "monitor@example.com",
     "email_cooldown_min": 60,
     "scripts_dir": "scripts"
+  },
+  "ai": {
+    "_comment": "Incident assistant (v1.7.0): a local model explains one incident and drafts ticket text with read-only tools. It decides nothing: levels, priorities and actions come from this file. See docs/configuration.md.",
+    "enabled": false,
+    "ollama_url": "http://localhost:11434",
+    "allow_remote": false,
+    "model": "qwen3:4b-instruct-2507-q4_K_M",
+    "fallback_model": "qwen2.5:3b",
+    "timeout_sec": 90,
+    "max_model_calls": 5,
+    "token_budget": 12000,
+    "max_traces": 200
   },
   "processes": [
     {
@@ -105,7 +117,8 @@
                 "{current_value}"
               ]
             }
-          ]
+          ],
+          "runbook": "1. Open Task Manager (Ctrl+Shift+Esc) > Processes, sort by CPU and note the top process.\n2. If it is a known runaway (an update, an indexer, a browser tab), wait or end it; otherwise check what started it.\n3. If the CPU stays above the threshold after 10 minutes, escalate with the process name and the duration."
         }
       ]
     },
@@ -152,7 +165,8 @@
                 "{current_value}"
               ]
             }
-          ]
+          ],
+          "runbook": "1. Open Task Manager > Processes, sort by Memory and note the top process.\n2. Close applications you do not need; a steadily growing process may be leaking memory: restart it.\n3. If memory stays above the threshold, escalate with the process name and its memory use."
         }
       ]
     }
@@ -201,7 +215,8 @@
                 "{current_value}"
               ]
             }
-          ]
+          ],
+          "runbook": "1. Run Disk Cleanup (cleanmgr) for C: and include system files.\n2. Empty the Recycle Bin and check Downloads and the temp folder (%TEMP%) for large files.\n3. If usage stays above the threshold, find the largest folders (Settings > System > Storage) and escalate for cleanup or more space."
         }
       ]
     }
@@ -251,7 +266,8 @@
                 "{host}"
               ]
             }
-          ]
+          ],
+          "runbook": "1. Check the network icon: is the PC connected to Wi-Fi or Ethernet?\n2. Open a website; if nothing loads, restart the router or switch networks.\n3. If other devices are offline too, it is an ISP outage: escalate to the network team or the provider."
         }
       ]
     },
@@ -389,7 +405,8 @@
               "subject_template": "[CRITICAL] {document} over budget on {hostname} — {timestamp}",
               "body_template": "Document: {document}\nTimestamp: {timestamp}\nCurrent total: {unit}{current_value}\nTarget: {unit}{target}\nUsed: {current_percent}%\nThreshold: {percent_of_target}%\n\nReview the spending in the source file."
             }
-          ]
+          ],
+          "runbook": "1. Open the budget CSV and sort the Groceries rows by Amount.\n2. Check for duplicated or misfiled rows before treating it as overspend.\n3. If the total is right, tell the budget owner how far over the target it is."
         }
       ]
     },

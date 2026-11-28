@@ -57,6 +57,33 @@ docker/simulator.py ──writes──► logs/*_state.json ◄──reads──
   are no PowerShell processes to stop. The banner says the data is simulated, and opening a spreadsheet from the editor explains why it
   can't.
 
+## The incident assistant in the demo
+
+The console's **Explain** and **Draft with AI** work in the container too. By default they answer with rules
+(`DemoClient`, labelled *Demo (rules, no AI)*): no model, no download. To run a real local model as well:
+
+```bash
+docker compose --profile ai up --build       # first run: pulls the Ollama image (~3.4 GB) and the model (~1.9 GB)
+DEMO_AI_MODEL=qwen3:4b-instruct-2507-q4_K_M docker compose --profile ai up --build    # the bigger model (12+ GB RAM)
+```
+
+The profile adds two containers. `ollama` runs Ollama with its models in the `ollama-models` volume, and
+`ollama-pull` downloads the model once and exits. The console finds Ollama at `http://ollama:11434` through
+`DEMO_OLLAMA_URL`. Without the profile that host does not exist, so the assistant answers with rules, and the panel
+says how to turn the model on.
+
+- **Private by construction.** The `ollama` container publishes **no port**. Only the demo container can reach it,
+  on the compose network, so incident data never leaves the machine. Strictly, `ollama` is not `localhost` to the
+  console, so the demo sets `allow_remote` for that one URL (invariant 5); the settings file is not changed.
+- **Pinned.** `ollama/ollama:0.40.19`, the version the evaluation ran on. `OLLAMA_IMAGE_TAG` overrides it.
+- **Sized for 8 GB machines.** The default model is `qwen2.5:3b`, the assistant's fallback model. In a check on a
+  7.2 GB laptop (Docker's VM had 3.4 GB), the `ollama` container used 2.2 GB and Explain answered in two model
+  calls. That answer also showed why the number check exists: the small model wrote "for 1 day" about an incident
+  a few minutes old, and the check flagged the 1 as untraced. The evaluation in [docs/eval/](eval/README.md)
+  measures the bigger model.
+- `python docker/smoke_test.py --ai` checks this setup: the assistant uses the container's model and an Explain
+  run completes on it. CI does not run it (it would download several GB on every push).
+
 ## Security notes
 
 - The image is `python:3.12-slim` with **no extra packages** (standard library only) and runs as a **non-root user**.

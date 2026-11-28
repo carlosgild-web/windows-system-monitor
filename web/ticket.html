@@ -13,6 +13,11 @@
   The ticket is a SIMULATION in the style of an ITSM tool such as ServiceNow: nothing is
   created in any ticketing system. The only thing that leaves the page is the email, and only
   when the user presses "Open in email app" (a mailto: link to their own mail client).
+
+  Draft with AI (v1.7.0): only when the console serves this page (http://localhost:5758/tickets/<number>).
+  The local assistant writes the short description, description and work notes; priority,
+  impact, urgency, severity, category and group stay as the rules set them. Opened from
+  file://, the page offers a link to the console copy instead and makes no request.
 -->
 <style>
 :root {
@@ -82,6 +87,17 @@ body { display: flex; flex-direction: column; background: var(--bg); color: var(
 .toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); padding: 8px 14px; border-radius: 8px; background: var(--head); color: var(--head-text); font-size: 12.5px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 .err { padding: 24px; }
+.ai { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12.5px; color: var(--text-2); }
+.ai[hidden] { display: none; }
+.ai b { color: var(--text); }
+.ai-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.ai-tag.rules { background: transparent; color: var(--text-2); border: 1px dashed var(--border); }
+.ai-flag { color: var(--crit); font-weight: 700; }
+.drafted { border-color: var(--accent); }
+.btn[disabled] { opacity: .6; cursor: progress; }
+.btn[hidden] { display: none; }
+.spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 640px) {
   .fields { grid-template-columns: 1fr; }
   .f { grid-template-columns: 110px 1fr; }
@@ -102,6 +118,8 @@ body { display: flex; flex-direction: column; background: var(--bg); color: var(
     ServiceNow. Nothing has been created or sent. Review it, preview the notification email, then open it in your
     email app if you want to send it.</span></div>
 
+  <div class="ai" id="ai-bar" role="status" aria-live="polite" hidden></div>
+
   <!-- 1. the incident -->
   <section class="view" id="v-ticket" aria-labelledby="t-title">
     <div class="card">
@@ -111,6 +129,7 @@ body { display: flex; flex-direction: column; background: var(--bg); color: var(
       </div>
       <dl class="fields" id="t-fields"></dl>
       <div class="sec"><h2>Description</h2><div class="box" id="t-desc"></div></div>
+      <div class="sec" id="t-work-sec" hidden><h2>Work notes</h2><div class="box drafted" id="t-work"></div></div>
       <div class="sec"><h2>Activity</h2><div id="t-notes"></div></div>
     </div>
   </section>
@@ -132,6 +151,9 @@ body { display: flex; flex-direction: column; background: var(--bg); color: var(
 
 <div class="bar" id="bar-ticket">
   <button class="btn" type="button" onclick="window.close()">Dismiss</button>
+  <a class="btn" id="ai-link" hidden href="#">Draft with AI in the console</a>
+  <button class="btn" type="button" id="ai-draft" hidden onclick="draftWithAI()">Draft with AI</button>
+  <button class="btn" type="button" id="ai-undo" hidden onclick="undoDraft()">Use the original text</button>
   <button class="btn pri" type="button" onclick="show('mail')">Preview notification email &rarr;</button>
 </div>
 <div class="bar" id="bar-mail" hidden>
@@ -241,7 +263,90 @@ function copyMail() {
 $('m-open').addEventListener('click', () => toast('Opening your email app…'));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('v-mail').hidden) show('ticket'); });
 
+// ---- Draft with AI (only on the console-served copy) ----------------------------
+const SERVED = /^https?:$/.test(location.protocol) && /^\/tickets\/INC\d{7}$/.test(location.pathname);
+let ORIGINAL = null;
+
+function aiBar(html) { $('ai-bar').hidden = !html; $('ai-bar').innerHTML = html || ''; }
+
+function mailtoFor(t) {
+  const to = encodeURIComponent(t.to).replace(/%40/g, '@').replace(/%2C/g, ',');
+  return `mailto:${to}?subject=${encodeURIComponent(t.subject)}&body=${encodeURIComponent(t.body)}`;
+}
+
+async function findIncident(t) {
+  // The open incident this ticket was raised for: same monitor and item, same level if possible.
+  const r = await fetch('/api/status');
+  const list = ((await r.json()).incidents || []).filter(i => i.monitor === t.monitor && i.target === t.item);
+  return list.find(i => i.level === t.level) || list[0] || null;
+}
+
+async function draftWithAI() {
+  const t = T;
+  $('ai-draft').disabled = true;
+  aiBar('<span class="spin" aria-hidden="true"></span> Finding the open incident&hellip;');
+  try {
+    const inc = await findIncident(t);
+    if (!inc) throw new Error('This incident is not open any more, so there is nothing to explain. The rule-based text stays.');
+    const r = await fetch('/api/ai/ticket-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                     body: JSON.stringify({ incident_id: inc.id }) });
+    let data = await r.json();
+    if (!r.ok && !(r.status === 409 && data.run_id)) throw new Error(data.error || ('HTTP ' + r.status));
+    let run = null;
+    for (let i = 0; i < 900; i++) {           // up to 12 minutes; each model call has its own timeout
+      const g = await fetch('/api/ai/runs/' + encodeURIComponent(data.run_id));
+      run = (await g.json()).run;
+      if (!run || run.status !== 'running') break;
+      const steps = run.steps.filter(s => s.type === 'tool').map(s => esc(s.name)).join(', ');
+      aiBar(`<span class="spin" aria-hidden="true"></span> ${esc(run.client.label)} is drafting&hellip; ${steps ? 'read: ' + steps : ''}`);
+      await new Promise(res => setTimeout(res, 800));
+    }
+    if (!run || run.status !== 'done' || !run.ticket) throw new Error((run && run.error) || 'No draft came back.');
+    applyDraft(run);
+  } catch (e) {
+    aiBar(`<b>No AI draft.</b> ${esc(e.message)}`);
+  } finally {
+    $('ai-draft').disabled = false;
+  }
+}
+
+function applyDraft(run) {
+  const d = run.ticket;
+  if (!ORIGINAL) ORIGINAL = Object.assign({}, T);
+  const body = d.description + (d.work_notes ? '\n\n' + d.work_notes : '');
+  T.subject = d.short_description; T.body = body; T.mailto = mailtoFor(T);
+  render(T);
+  $('t-work').textContent = d.work_notes || '';
+  $('t-work-sec').hidden = !d.work_notes;
+  $('t-title').classList.add('drafted');
+  const rules = !run.client.is_ai;
+  const untraced = (run.check && run.check.untraced) || [];
+  aiBar(`<span class="ai-tag${rules ? ' rules' : ''}">${rules ? 'Demo (rules, no AI)' : 'AI draft'}</span>` +
+    `<span>Short description, description and work notes by <b>${esc(run.client.label)}</b>. ` +
+    `Priority <b>${esc(d.priority)}</b>, impact, urgency and category are set by the rules, not the model.</span>` +
+    (untraced.length ? `<span class="ai-flag">Check these numbers: ${untraced.map(esc).join(', ')} (not in the monitors' data).</span>`
+                     : `<span>Every number comes from the monitors' data.</span>`));
+  $('ai-undo').hidden = false;
+  $('ai-draft').textContent = 'Draft again';
+}
+
+function undoDraft() {
+  Object.assign(T, ORIGINAL);
+  render(T);
+  $('t-work-sec').hidden = true;
+  $('t-title').classList.remove('drafted');
+  aiBar('');
+  $('ai-undo').hidden = true;
+  $('ai-draft').textContent = 'Draft with AI';
+}
+
 render(T || SAMPLE);
+if (T && SERVED) $('ai-draft').hidden = false;
+else if (T && location.protocol === 'file:') {
+  // A plain link: the file:// page sends nothing; the console copy can ask the local assistant.
+  $('ai-link').href = 'http://localhost:5758/tickets/' + encodeURIComponent(T.number);
+  $('ai-link').hidden = false;
+}
 if (location.hash === '#email') show('mail');      // a link straight to the email step
 </script>
 </body>

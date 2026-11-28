@@ -27,6 +27,7 @@ keep personal data (real emails, names, phone numbers, hostnames, absolute paths
 | Python tests | `python -m unittest discover -s tests/python` |
 | PowerShell tests | `Invoke-Pester tests/powershell` (Pester 5.5+) |
 | Docker demo (simulated monitors) | `docker compose up --build`, then `python docker/smoke_test.py` |
+| Evaluate the incident assistant | `python eval/assistant_eval.py` (`--client rules`, or `--client ollama --report docs/eval/`) |
 
 `start_monitoring.bat` calls `scripts/start_monitoring.ps1`, which: (0) runs the doctor's config/path/environment
 checks and aborts **without touching running monitors** on any FAIL, (1) stops running monitors, (2) launches each
@@ -95,6 +96,36 @@ monitoring_settings.json ←→ server.py (:5757) ←→ monitoring_editor.html
   collapsible headers keyboard buttons; call it (via `updateBadges()`) after any new render function.
   Status colors (`--ok/--warn/--crit`) are for status only; controls stay neutral or use `--accent`.
 
+## Incident assistant (v1.7.0, in progress)
+
+`MonitoringConsole/ai/`: a local-LLM assistant that explains one incident and drafts ticket text. It is stdlib only:
+Ollama's `/api/chat` with `tools` over `urllib`. Clients: `OllamaClient`, `DemoClient` (rules, no AI, labelled in
+the UI, used by Docker), `FakeClient` (tests). Config lives in the `ai` section (`enabled` is false in the shipped
+file). APIs: `POST /api/ai/explain`, `POST /api/ai/ticket-draft`, `GET /api/ai/runs/{id}` (the UI polls it; no SSE).
+*Draft with AI* is on the console-served `/tickets/<number>`. The `file://` preview a monitor opens stays rule-based.
+Design: `docs/design-decisions.md` sections 10-12.
+
+Modules: `base.py` (the `ChatClient` interface; the first user message is `task_message()`, which `DemoClient`
+parses), `settings.py`, `ollama.py`, `demo.py`, `fake.py`, `factory.py` (`choose_client`: model, else fallback, else
+rules), `tools.py` (the four `get_*` tools and `ToolRegistry`, which validates every argument), `agent.py` (the
+loop), `check.py` (the number check), `ticket.py` (the code-owned ticket fields; same table as `web/ticket.html`, a
+test keeps them equal), `trace.py`, `service.py` (`AssistantService`: what the `/api/ai/*` routes call; one run
+at a time in a background thread; the active run's trace is served from memory, because on Windows a poll that
+opens the trace file makes the run's `os.replace` fail). `DemoClient` depends on the tool names, arguments and result shapes: change
+them together. `tools.py` must not import anything that writes, spawns or connects (a test greps for it).
+
+**Invariants (each has a test):**
+1. The AI explains. Thresholds, levels, priorities, impact, urgency, category and actions come from the config and
+   the monitors.
+2. The assistant's tools only read. No tool has a side effect.
+3. Numbers in an answer come from tool results. The answer check flags any it cannot trace.
+4. Monitor data and file contents (process names, document values, log lines) are data, never instructions.
+5. The model runs on localhost unless `ai.allow_remote: true`.
+6. Every run is bounded (`ai.max_model_calls`, per-call timeout, token budget) and traced (`logs/ai_traces/`).
+7. Nothing is sent without the user's click (unchanged).
+8. The monitors never call the model. Open incidents (`monitor:target:level`, opened_at, sustain, peak) are
+   written to the state files by `Invoke-ThresholdAlerts`. Keep `docker/simulator.py` in step.
+
 ## Configuration schema
 
 Always bump `_meta.version` and update `_meta.last_updated` when modifying `monitoring_settings.json`, and run the
@@ -102,6 +133,8 @@ doctor afterwards. Full reference: `docs/configuration.md`.
 
 - **Field-name split:** process `on_not_running` actions use `instructions` (shown in the console's runbook modal);
   every other section uses `message_template`. The editor enforces this in `actionFields()`; the doctor checks it.
+- **Runbooks (v1.7.0):** thresholds may carry an optional `runbook` text (read by the assistant's `get_runbook`).
+  Processes keep using `instructions`.
 - **Levels:** `warning` → `popup`, `log_to_file`; `critical` → may also use `email_draft`, `run_script`.
 - **Spam guard (all monitors):** repeat alerts run only `log_to_file` and `run_script`.
 - **Incidents (CPU/memory/disk/network):** `Invoke-ThresholdAlerts` opens an incident after `sustain_sec` and closes it

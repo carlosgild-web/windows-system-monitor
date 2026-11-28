@@ -3,6 +3,11 @@
 #   docker compose down
 # Ports are published on 127.0.0.1 only: the demo is not reachable from the network,
 # and the servers' Host/Origin checks keep working (they expect localhost:<port>).
+#
+# With a local model for the incident assistant (downloads the Ollama image, about 3.4 GB, and the
+# model, about 2 GB, into the "ollama-models" volume; see docs/docker.md):
+#   docker compose --profile ai up --build
+# Without the profile the "ollama" host does not exist and the assistant answers with rules, no AI.
 name: windows-system-monitor-demo
 
 services:
@@ -12,4 +17,31 @@ services:
     ports:
       - "127.0.0.1:5758:5758"
       - "127.0.0.1:5757:5757"
+    environment:
+      DEMO_OLLAMA_URL: http://ollama:11434
+      DEMO_AI_MODEL: ${DEMO_AI_MODEL:-qwen2.5:3b}
     restart: unless-stopped
+
+  # Profile "ai": Ollama on the compose network only. No published port: only the demo container
+  # can reach it, and incident data never leaves the machine.
+  ollama:
+    profiles: ["ai"]
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.40.19}
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+  # Pulls the model once (kept in the volume), then exits.
+  ollama-pull:
+    profiles: ["ai"]
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.40.19}
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      DEMO_AI_MODEL: ${DEMO_AI_MODEL:-qwen2.5:3b}
+    entrypoint: ["/bin/sh", "-c", "until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull \"$$DEMO_AI_MODEL\""]
+    restart: "no"
+
+volumes:
+  ollama-models:

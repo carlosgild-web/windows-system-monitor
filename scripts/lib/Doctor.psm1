@@ -130,6 +130,99 @@ function Test-ClearSettings ($Threshold, [string]$Where) {
     }
 }
 
+function Test-IsLoopbackHost ([string]$HostName) {
+    # localhost, 127.x.x.x or ::1 (.NET Framework spells it [0000:...:0001] in Uri.Host).
+    $h = $HostName.Trim('[', ']').ToLowerInvariant()
+    if ($h -eq 'localhost') { return $true }
+    $ip = $null
+    return ([System.Net.IPAddress]::TryParse($h, [ref]$ip) -and [System.Net.IPAddress]::IsLoopback($ip))
+}
+
+function Get-AiUri ($Ai) {
+    # The ai.ollama_url as a [Uri] when it is an absolute http(s) URL, else $null.
+    $u = $null
+    if (-not [Uri]::TryCreate([string]$Ai.ollama_url, [UriKind]::Absolute, [ref]$u)) { return $null }
+    if ($u.Scheme -notin @('http', 'https')) { return $null }
+    return $u
+}
+
+function Test-AiConfig ($Ai) {
+    # The optional "ai" section (incident assistant, v1.7.0). Schema only; Test-DoctorAssistant
+    # checks that Ollama answers.
+    $cat = 'Config'
+    foreach ($k in 'enabled', 'allow_remote') {
+        if ((Test-HasValue $Ai $k) -and $Ai.$k -isnot [bool]) {
+            New-DoctorResult $cat 'FAIL' "ai.$k" 'Must be true or false'
+        }
+    }
+    $uri = Get-AiUri $Ai
+    if (-not (Test-HasValue $Ai 'ollama_url')) {
+        New-DoctorResult $cat 'FAIL' 'ai.ollama_url' 'Missing (for example http://localhost:11434)'
+    } elseif ($null -eq $uri) {
+        New-DoctorResult $cat 'FAIL' 'ai.ollama_url' "'$($Ai.ollama_url)' must be an http:// or https:// URL such as http://localhost:11434"
+    } elseif (-not (Test-IsLoopbackHost $uri.Host)) {
+        if ($Ai.allow_remote -eq $true) {
+            New-DoctorResult $cat 'WARN' 'ai.ollama_url' "$($uri.Host) is not this machine: incident data leaves it (ai.allow_remote is true)"
+        } else {
+            New-DoctorResult $cat 'FAIL' 'ai.ollama_url' "$($uri.Host) is not this machine; use localhost, or set ai.allow_remote to true to send incident data to it"
+        }
+    }
+    if (-not (Test-HasValue $Ai 'model') -or $Ai.model -isnot [string] -or -not $Ai.model.Trim()) {
+        New-DoctorResult $cat 'FAIL' 'ai.model' 'Must be an Ollama model tag such as qwen3:4b-instruct-2507-q4_K_M'
+    }
+    if ((Test-HasValue $Ai 'fallback_model') -and ($Ai.fallback_model -isnot [string] -or -not $Ai.fallback_model.Trim())) {
+        New-DoctorResult $cat 'FAIL' 'ai.fallback_model' 'Must be an Ollama model tag, or leave it out'
+    }
+    if ((Test-HasValue $Ai 'timeout_sec') -and (-not (Test-IsNumber $Ai.timeout_sec) -or $Ai.timeout_sec -le 0)) {
+        New-DoctorResult $cat 'FAIL' 'ai.timeout_sec' 'Must be a positive number (seconds per model call)'
+    }
+    $ints = @{ max_model_calls = @(1, 20); token_budget = @(500, 1000000); max_traces = @(1, 100000) }
+    foreach ($k in $ints.Keys) {
+        if (-not (Test-HasValue $Ai $k)) { continue }
+        $v = $Ai.$k; $lo = $ints[$k][0]; $hi = $ints[$k][1]
+        if (-not ($v -is [int] -or $v -is [long]) -or $v -lt $lo -or $v -gt $hi) {
+            New-DoctorResult $cat 'FAIL' "ai.$k" "Must be a whole number from $lo to $hi"
+        }
+    }
+}
+
+function Test-RunbookField ($Config) {
+    # Optional "runbook" text on any threshold (read by the incident assistant).
+    # Processes keep their runbook in the action's "instructions".
+    $cat = 'Config'
+    $i = 0
+    foreach ($p in @($Config.processes)) {
+        if ($null -eq $p) { continue }
+        if (Test-HasValue $p 'runbook') {
+            New-DoctorResult $cat 'WARN' "processes[$i].runbook" "Ignored: processes keep their runbook in the on_not_running action's 'instructions'"
+        }
+        $i++
+    }
+    $lists = @()
+    foreach ($metric in 'cpu', 'memory') {
+        $m = if ($Config.performance) { $Config.performance.$metric } else { $null }
+        if ($m) { $lists += @{ Where = "performance.$metric"; Thresholds = $m.thresholds } }
+    }
+    foreach ($sec in 'disk', 'network', 'document') {
+        $k = 0
+        foreach ($item in @($Config.$sec)) {
+            if ($null -eq $item) { continue }
+            $lists += @{ Where = "$sec[$k]"; Thresholds = $item.thresholds }
+            $k++
+        }
+    }
+    foreach ($l in $lists) {
+        $j = 0
+        foreach ($t in @($l.Thresholds)) {
+            if ($null -eq $t) { continue }
+            if ((Test-HasValue $t 'runbook') -and $t.runbook -isnot [string]) {
+                New-DoctorResult $cat 'FAIL' "$($l.Where).thresholds[$j].runbook" 'Must be text (use \n for new lines)'
+            }
+            $j++
+        }
+    }
+}
+
 function Test-DoctorConfig ($Config) {
     $r = @()
     $cat = 'Config'
@@ -281,6 +374,12 @@ function Test-DoctorConfig ($Config) {
         }
         $k++
     }
+    # ai (optional) and runbooks
+    if ($null -ne $Config.ai) {
+        $bad = @(Test-AiConfig $Config.ai); $r += $bad; $errors += @($bad | Where-Object Status -eq 'FAIL').Count
+    }
+    $bad = @(Test-RunbookField $Config); $r += $bad; $errors += @($bad | Where-Object Status -eq 'FAIL').Count
+
     if ($null -ne $Config.ebook_sales) {
         $r += New-DoctorResult $cat 'WARN' 'ebook_sales' 'Replaced by the "document" section in v1.6.0 and ignored; see docs/configuration.md'
     }
@@ -471,6 +570,42 @@ function Test-DoctorRuntime ($Config) {
     return $r
 }
 
+# ---- Incident assistant (Ollama) -------------------------------------------------
+function Get-OllamaModelList ([string]$BaseUrl, [int]$TimeoutSec = 3) {
+    # The model tags Ollama has pulled (GET /api/tags). Throws when Ollama does not answer.
+    $resp = Invoke-RestMethod -Uri ($BaseUrl.TrimEnd('/') + '/api/tags') -Method Get -TimeoutSec $TimeoutSec -UseBasicParsing
+    return @($resp.models | ForEach-Object { [string]$_.name })
+}
+
+function Test-DoctorAssistant ($Config) {
+    # Never FAIL: the monitors work without the assistant. Disabled is OK.
+    $cat = 'Assistant'
+    $ai = $Config.ai
+    if ($null -eq $ai -or $ai.enabled -ne $true) {
+        return @(New-DoctorResult $cat 'OK' 'Incident assistant' 'Disabled (ai.enabled is false); Explain uses the rules, no AI')
+    }
+    $uri = Get-AiUri $ai
+    if ($null -eq $uri -or (-not (Test-IsLoopbackHost $uri.Host) -and $ai.allow_remote -ne $true)) {
+        return @(New-DoctorResult $cat 'WARN' 'Ollama reachable' 'Skipped: fix ai.ollama_url first (see Config)')
+    }
+    $base = $uri.GetLeftPart([UriPartial]::Authority)
+    try { $models = Get-OllamaModelList $base }
+    catch {
+        return @(New-DoctorResult $cat 'WARN' 'Ollama reachable' "No answer from $base ($($_.Exception.Message)). Start Ollama; until then Explain uses the rules, no AI")
+    }
+    $r = @(New-DoctorResult $cat 'OK' 'Ollama reachable' $base)
+    $want = [string]$ai.model
+    $has  = { param($tag) $models -contains $tag -or ($tag -notmatch ':' -and $models -contains "${tag}:latest") }
+    if (& $has $want) {
+        $r += New-DoctorResult $cat 'OK' "Model $want" 'pulled'
+    } elseif ($ai.fallback_model -and (& $has ([string]$ai.fallback_model))) {
+        $r += New-DoctorResult $cat 'WARN' "Model $want" "Not pulled; the fallback $($ai.fallback_model) is used. Run: ollama pull $want"
+    } else {
+        $r += New-DoctorResult $cat 'WARN' "Model $want" "Not pulled. Run: ollama pull $want"
+    }
+    return $r
+}
+
 # ---- Orchestration -----------------------------------------------------------
 function Invoke-Doctor ([string]$SettingsPath, [switch]$SkipRuntime, [switch]$SkipEnvironment) {
     if (-not $SettingsPath) { $SettingsPath = Join-Path $MonitorProjectRoot 'monitoring_settings.json' }
@@ -485,7 +620,10 @@ function Invoke-Doctor ([string]$SettingsPath, [switch]$SkipRuntime, [switch]$Sk
     }
     $results += Test-DoctorConfig $cfg
     $results += Test-DoctorPaths  $cfg
-    if (-not $SkipRuntime) { $results += Test-DoctorRuntime $cfg }
+    if (-not $SkipRuntime) {
+        $results += Test-DoctorRuntime $cfg
+        $results += Test-DoctorAssistant $cfg
+    }
     return $results
 }
 
@@ -503,5 +641,5 @@ function Write-DoctorReport ($Results) {
     }
 }
 
-Export-ModuleMember -Function Test-DoctorEnvironment, Test-DoctorConfig, Test-DoctorPaths, Test-DoctorRuntime,
+Export-ModuleMember -Function Test-DoctorEnvironment, Test-DoctorConfig, Test-DoctorPaths, Test-DoctorRuntime, Test-DoctorAssistant,
                               Invoke-Doctor, Write-DoctorReport, Get-MonitorSettings, Resolve-ProjectPath

@@ -34,6 +34,7 @@ class SimulatorTests(unittest.TestCase):
         for name in ("process", "performance", "disk", "network", "document"):
             data = json.loads((self.tmp / "logs" / f"{name}_state.json").read_text(encoding="utf-8"))
             datetime.strptime(data["updated"], sim.FMT)       # same timestamp format as the monitors
+            self.assertIsInstance(data["incidents"], list, f"{name}_state.json lists its open incidents")
         self.assertFalse(list((self.tmp / "logs").glob("*.tmp")), "writes are atomic")
 
     def docs(self):
@@ -80,6 +81,33 @@ class SimulatorTests(unittest.TestCase):
         procs = {p["name"]: p for p in s.processes(self.cfg, datetime.now())["processes"]}
         self.assertFalse(procs["notepad.exe"]["is_running"])
         self.assertTrue(procs["explorer.exe"]["is_running"] and procs["dwm.exe"]["is_running"])
+
+    # Same fields, same order as ConvertTo-IncidentRecord in scripts/lib/MonitorActions.ps1.
+    INCIDENT_FIELDS = ["id", "monitor", "target", "level", "opened_at", "exceeded_since",
+                       "sustain_sec", "threshold", "peak", "last_value", "alert_count"]
+
+    def test_a_stopped_notepad_is_an_open_incident(self):
+        s = sim.Simulator()
+        s.started -= 120
+        inc = s.processes(self.cfg, datetime.now())["incidents"]
+        self.assertEqual([i["id"] for i in inc], ["process:notepad.exe:warning"])
+        self.assertEqual(list(inc[0]), self.INCIDENT_FIELDS)
+
+    def test_a_cpu_spike_is_one_incident_with_its_peak(self):
+        s = sim.Simulator()
+        values = iter([97.0, 99.2, 98.1, 30.0])
+        s.cpu.next = lambda: next(values)
+        seen = [s.performance(self.cfg, datetime.now())["incidents"] for _ in range(3)]
+        self.assertEqual([[i["id"] for i in inc] for inc in seen], [["performance:cpu:critical"]] * 3)
+        last = seen[-1][0]
+        self.assertEqual((last["peak"], last["last_value"], last["threshold"], last["alert_count"]), (99.2, 98.1, 95, 3))
+        self.assertEqual(list(last), self.INCIDENT_FIELDS)
+        self.assertEqual(s.performance(self.cfg, datetime.now())["incidents"], [], "closes once CPU is back to ok")
+
+    def test_a_document_over_budget_is_an_incident(self):
+        self.cfg["document"][0]["target"] = 300              # 340.15 of 300: critical
+        inc = sim.Simulator().documents(self.cfg, datetime.now())["incidents"]
+        self.assertIn("document:Groceries spend (monthly budget):critical", [i["id"] for i in inc])
 
     def test_levels_follow_the_configured_thresholds(self):
         cpu = self.cfg["performance"]["cpu"]["thresholds"]

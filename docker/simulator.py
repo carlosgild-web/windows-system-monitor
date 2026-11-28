@@ -13,6 +13,9 @@ What is real and what is simulated:
   network targets (the console and the editor in this container) are real TCP checks.
 - Simulated: CPU and memory (a random walk with occasional spikes), disk usage, public
   host latency, and Notepad, which "closes" for a while every couple of minutes.
+- Every state file lists its open incidents under "incidents", in the monitors' format
+  (ConvertTo-IncidentRecord in scripts/lib/MonitorActions.ps1). Simplified: an incident is open
+  while the item's level is not ok, with no sustain or hysteresis.
 """
 import csv
 import io
@@ -71,6 +74,42 @@ def tcp_ok(host, port, timeout=0.5):
         return False
 
 
+class Incidents:
+    """Open incidents of one monitor, keyed "<monitor>:<target>:<level>" like the real ones."""
+
+    def __init__(self, monitor):
+        self.monitor = monitor
+        self.open = {}
+
+    def step(self, seen):
+        """seen: (target, level, value, threshold, below) for every item checked this tick,
+        level "ok" or "unknown" when nothing is wrong. Returns the open incidents."""
+        now = datetime.now()
+        current = {}
+        for target, level, value, threshold, below in seen:
+            if level not in ("warning", "critical"):
+                continue
+            key = f"{self.monitor}:{target}:{level}"
+            inc = self.open.get(key) or {
+                "id": key, "monitor": self.monitor, "target": target, "level": level,
+                "opened_at": now_str(now), "exceeded_since": now_str(now), "sustain_sec": 0,
+                "threshold": threshold, "peak": None, "last_value": None, "alert_count": 0}
+            inc["alert_count"] += 1
+            inc["last_value"] = value
+            if value is not None and (inc["peak"] is None or (value < inc["peak"] if below else value > inc["peak"])):
+                inc["peak"] = value
+            current[key] = inc
+        self.open = current
+        return list(current.values())
+
+
+def threshold_for(thresholds, level, key):
+    for t in thresholds or []:
+        if t.get("level") == level and t.get(key) is not None:
+            return t.get(key)
+    return None
+
+
 class Walk:
     """A bounded random walk with occasional spikes."""
 
@@ -101,6 +140,7 @@ class Simulator:
         self.disk_base = {}
         self.proc = {}              # name -> {"running", "down_since", "alerts"}
         self.started = time.monotonic()
+        self.incidents = {m: Incidents(m) for m in ("performance", "disk", "network", "document")}
 
     # ---- processes ----------------------------------------------------------------
     def processes(self, cfg, now):
@@ -124,7 +164,16 @@ class Simulator:
                 "down_since": now_str(st["down_since"]) if st["down_since"] else None,
                 "alert_count": st["alerts"],
             })
-        return {"updated": now_str(now), "monitor_pid": os.getpid(), "processes": out}
+        incidents = []
+        for p, row in zip(cfg.get("processes", []), out):
+            if row["is_running"] or not p.get("required") or not row["down_since"]:
+                continue
+            level = next((a.get("level") for a in (p.get("actions") or {}).get("on_not_running", []) if a.get("level")), "warning")
+            incidents.append({"id": f"process:{row['name']}:{level}", "monitor": "process", "target": row["name"],
+                              "level": level, "opened_at": row["down_since"], "exceeded_since": row["down_since"],
+                              "sustain_sec": 0, "threshold": None, "peak": None, "last_value": None,
+                              "alert_count": row["alert_count"]})
+        return {"updated": now_str(now), "monitor_pid": os.getpid(), "processes": out, "incidents": incidents}
 
     # ---- performance ----------------------------------------------------------------
     def performance(self, cfg, now):
@@ -137,7 +186,10 @@ class Simulator:
             metrics.append({"name": key, "display_name": label, "current_value": value,
                             "current_level": level_for(value, perf[key].get("thresholds"), "percent"),
                             "last_check": now_str(now)})
-        return {"updated": now_str(now), "monitor_pid": os.getpid(), "metrics": metrics}
+        incidents = self.incidents["performance"].step(
+            (m["name"], m["current_level"], m["current_value"],
+             threshold_for(perf[m["name"]].get("thresholds"), m["current_level"], "percent"), False) for m in metrics)
+        return {"updated": now_str(now), "monitor_pid": os.getpid(), "metrics": metrics, "incidents": incidents}
 
     # ---- disk -------------------------------------------------------------------------
     def disk(self, cfg, now):
@@ -151,7 +203,11 @@ class Simulator:
                            "free_gb": round(size_gb * (100 - used) / 100, 1),
                            "current_level": level_for(used, d.get("thresholds"), "percent_used"),
                            "last_check": now_str(now)})
-        return {"updated": now_str(now), "monitor_pid": os.getpid(), "drives": drives}
+        by_drive = {d.get("drive", "C:\\"): d for d in cfg.get("disk", [])}
+        incidents = self.incidents["disk"].step(
+            (d["drive"], d["current_level"], d["percent_used"],
+             threshold_for(by_drive[d["drive"]].get("thresholds"), d["current_level"], "percent_used"), False) for d in drives)
+        return {"updated": now_str(now), "monitor_pid": os.getpid(), "drives": drives, "incidents": incidents}
 
     # ---- network ------------------------------------------------------------------------
     def network(self, cfg, now):
@@ -177,7 +233,11 @@ class Simulator:
             hosts.append({"name": h.get("name", host), "host": host, "port": port, "protocol": h.get("protocol"),
                           "reachable": reachable, "latency_ms": latency, "current_level": level,
                           "last_check": now_str(now)})
-        return {"updated": now_str(now), "monitor_pid": os.getpid(), "hosts": hosts}
+        by_name = {h.get("name", h.get("host", "")): h for h in cfg.get("network", [])}
+        incidents = self.incidents["network"].step(
+            (h["name"], h["current_level"], h["latency_ms"],
+             threshold_for(by_name[h["name"]].get("thresholds"), h["current_level"], "latency_ms"), False) for h in hosts)
+        return {"updated": now_str(now), "monitor_pid": os.getpid(), "hosts": hosts, "incidents": incidents}
 
     # ---- document: the real CSV, the real thresholds ------------------------------------
     @staticmethod
@@ -264,8 +324,15 @@ class Simulator:
         return state
 
     def documents(self, cfg, now):
-        return {"updated": now_str(now), "monitor_pid": os.getpid(),
-                "documents": [self.document(d, now) for d in self._documents_cfg(cfg)]}
+        docs = self._documents_cfg(cfg)
+        rows = [self.document(d, now) for d in docs]
+        seen = []
+        for d, row in zip(docs, rows):
+            t = next((t for t in d.get("thresholds", []) if t.get("level") == row["current_level"]), {})
+            seen.append((row["display_name"], row["current_level"], row["percent_of_target"],
+                         t.get("percent_of_target"), t.get("condition") == "below"))
+        return {"updated": now_str(now), "monitor_pid": os.getpid(), "documents": rows,
+                "incidents": self.incidents["document"].step(seen)}
 
     def tick(self):
         cfg = load_settings()

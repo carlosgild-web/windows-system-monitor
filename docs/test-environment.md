@@ -100,6 +100,25 @@ that does not exist yet counts as 0 MB until it is created.
 The buttons only act on this copy of the project: monitors started from another folder on the same machine are
 left alone.
 
+## Ask the incident assistant
+
+Every open incident is listed under **Open incidents** at the top of the console.
+
+1. Click **Explain** on one. A panel opens and shows the *Agent steps* as they happen: the model's tool calls
+   (`get_incident`, `get_recent_events`, `get_runbook`), what each tool returned, then the answer (*What happened*,
+   *Likely causes*, *Next steps*) and the numbers it checked against the monitors' data.
+2. The badge says who answered. **Local AI** is a model running on this PC in Ollama. **Demo (rules, no AI)** means
+   the assistant is off (`ai.enabled` is `false`, as shipped) or Ollama does not answer; the panel works the same way.
+3. To use the model: install [Ollama](https://ollama.com), run `ollama pull qwen3:4b-instruct-2507-q4_K_M`
+   (`qwen2.5:3b` on an 8 GB machine), turn on **Enabled** in the editor's *Incident Assistant* card, and save.
+   `doctor.bat` checks that Ollama answers and the model is there. On a laptop, an answer takes about a minute.
+4. When an `email_draft` opens a ticket, click **Draft with AI in the console** on it. The console's copy of the
+   ticket has a **Draft with AI** button: the model writes the short description, description and work notes. The
+   priority, impact, urgency and category do not change, because the rules set them. **Use the original text**
+   puts the rule-based text back. Nothing is sent until you open the email yourself.
+
+The assistant only reads. It cannot pause a monitor, change a setting, run a script or send anything.
+
 ## Make it your own
 
 Replace the demo items with what matters on your machine: the processes your applications need, your servers'

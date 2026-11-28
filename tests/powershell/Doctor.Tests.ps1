@@ -47,6 +47,17 @@ Describe 'Test-DoctorConfig detects <Case>' -ForEach @(
     @{ Case = 'a negative clear_margin';       Check = 'performance.cpu.thresholds[1].clear_margin'; Mutate = { param($c) $c.performance.cpu.thresholds[1] | Add-Member clear_margin -5 } }
     @{ Case = 'a non-numeric disk clear_sec';  Check = 'disk[0].thresholds[0].clear_sec';            Mutate = { param($c) $c.disk[0].thresholds[0] | Add-Member clear_sec 'soon' } }
     @{ Case = 'a negative network clear_sec';  Check = 'network[0].thresholds[1].clear_sec';         Mutate = { param($c) $c.network[0].thresholds[1] | Add-Member clear_sec -1 } }
+    @{ Case = 'a non-boolean ai.enabled';      Check = 'ai.enabled';                                 Mutate = { param($c) $c.ai.enabled = 'yes' } }
+    @{ Case = 'an ollama_url without a scheme'; Check = 'ai.ollama_url';                             Mutate = { param($c) $c.ai.ollama_url = 'localhost:11434' } }
+    @{ Case = 'a remote ollama_url';           Check = 'ai.ollama_url';                              Mutate = { param($c) $c.ai.ollama_url = 'http://192.168.1.20:11434' } }
+    @{ Case = 'a missing ollama_url';          Check = 'ai.ollama_url';                              Mutate = { param($c) $c.ai.PSObject.Properties.Remove('ollama_url') } }
+    @{ Case = 'an empty ai.model';             Check = 'ai.model';                                   Mutate = { param($c) $c.ai.model = ' ' } }
+    @{ Case = 'a zero ai.timeout_sec';         Check = 'ai.timeout_sec';                             Mutate = { param($c) $c.ai.timeout_sec = 0 } }
+    @{ Case = 'zero model calls';              Check = 'ai.max_model_calls';                         Mutate = { param($c) $c.ai.max_model_calls = 0 } }
+    @{ Case = 'fractional model calls';        Check = 'ai.max_model_calls';                         Mutate = { param($c) $c.ai.max_model_calls = 2.5 } }
+    @{ Case = 'a tiny token budget';           Check = 'ai.token_budget';                            Mutate = { param($c) $c.ai.token_budget = 10 } }
+    @{ Case = 'a non-text runbook';            Check = 'disk[0].thresholds[1].runbook';              Mutate = { param($c) $c.disk[0].thresholds[1].runbook = 5 } }
+    @{ Case = 'a runbook given as a list';     Check = 'document[0].thresholds[1].runbook';          Mutate = { param($c) $c.document[0].thresholds[1].runbook = @('step 1', 'step 2') } }
 ) {
     It 'as FAIL' {
         $cfg = New-TestConfig
@@ -92,6 +103,95 @@ Describe 'Test-DoctorConfig conventions' {
         $cfg.performance.cpu.thresholds[0].actions += $email
         $warn = Get-Status (Test-DoctorConfig $cfg) 'WARN'
         $warn.Detail | Should -Contain 'By convention only critical thresholds send email or run scripts'
+    }
+}
+
+Describe 'Test-DoctorConfig incident assistant (ai)' {
+    It 'ships with the assistant off and a loopback Ollama URL' {
+        $cfg = New-TestConfig
+        $cfg.ai.enabled      | Should -BeFalse
+        $cfg.ai.allow_remote | Should -BeFalse
+        $cfg.ai.ollama_url   | Should -Match '^http://(localhost|127\.0\.0\.1)(:\d+)?$'
+    }
+
+    It 'accepts every loopback form' {
+        foreach ($url in 'http://localhost:11434', 'http://127.0.0.1:11434', 'http://[::1]:11434', 'https://localhost') {
+            $cfg = New-TestConfig
+            $cfg.ai.ollama_url = $url
+            (Get-Status (Test-DoctorConfig $cfg) 'FAIL') | Should -BeNullOrEmpty -Because $url
+        }
+    }
+
+    It 'only warns about a remote Ollama when allow_remote is true' {
+        $cfg = New-TestConfig
+        $cfg.ai.ollama_url   = 'http://gpu-box.example.com:11434'
+        $cfg.ai.allow_remote = $true
+        $results = Test-DoctorConfig $cfg
+        Get-Status $results 'FAIL' | Should -BeNullOrEmpty
+        (Get-Status $results 'WARN').Detail | Should -Match 'incident data leaves it'
+    }
+
+    It 'still accepts a config without an ai section' {
+        $cfg = New-TestConfig
+        $cfg.PSObject.Properties.Remove('ai')
+        Get-Status (Test-DoctorConfig $cfg) 'FAIL' | Should -BeNullOrEmpty
+    }
+
+    It 'ships runbooks on the critical thresholds' {
+        $cfg = New-TestConfig
+        $cfg.performance.cpu.thresholds[1].runbook | Should -Match '^1\. '
+        $cfg.disk[0].thresholds[1].runbook        | Should -Match '^1\. '
+    }
+
+    It 'warns that a runbook on a process is ignored' {
+        $cfg = New-TestConfig
+        $cfg.processes[0] | Add-Member runbook 'restart it'
+        (Get-Status (Test-DoctorConfig $cfg) 'WARN').Check | Should -Contain 'processes[0].runbook'
+    }
+}
+
+Describe 'Test-DoctorAssistant' {
+    BeforeEach {
+        $cfg = New-TestConfig
+        $cfg.ai.enabled = $true
+    }
+
+    It 'is OK and asks nothing of Ollama while the assistant is off' {
+        Mock -ModuleName Doctor Get-OllamaModelList { throw 'must not be called' }
+        $cfg.ai.enabled = $false
+        $r = @(Test-DoctorAssistant $cfg)
+        $r.Status | Should -Be 'OK'
+        Should -Invoke -ModuleName Doctor Get-OllamaModelList -Times 0 -Exactly
+    }
+
+    It 'is OK when Ollama answers and the model is pulled' {
+        Mock -ModuleName Doctor Get-OllamaModelList { @('qwen2.5:3b', 'qwen3:4b-instruct-2507-q4_K_M') }
+        $r = @(Test-DoctorAssistant $cfg)
+        $r.Status | Should -Not -Contain 'WARN'
+        $r.Check  | Should -Contain 'Model qwen3:4b-instruct-2507-q4_K_M'
+    }
+
+    It 'warns (never fails) when Ollama does not answer' {
+        Mock -ModuleName Doctor Get-OllamaModelList { throw 'connection refused' }
+        $r = @(Test-DoctorAssistant $cfg)
+        $r.Status | Should -Be 'WARN'
+        $r.Detail | Should -Match 'rules, no AI'
+    }
+
+    It 'warns and names the fallback when only the fallback model is pulled' {
+        Mock -ModuleName Doctor Get-OllamaModelList { @('qwen2.5:3b') }
+        $row = Test-DoctorAssistant $cfg | Where-Object Check -like 'Model *'
+        $row.Status | Should -Be 'WARN'
+        $row.Detail | Should -Match 'fallback qwen2\.5:3b'
+        $row.Detail | Should -Match 'ollama pull qwen3:4b-instruct-2507-q4_K_M'
+    }
+
+    It 'never calls a remote Ollama that the config does not allow' {
+        Mock -ModuleName Doctor Get-OllamaModelList { @() }
+        $cfg.ai.ollama_url = 'http://203.0.113.7:11434'
+        $r = @(Test-DoctorAssistant $cfg)
+        $r.Status | Should -Be 'WARN'
+        Should -Invoke -ModuleName Doctor Get-OllamaModelList -Times 0 -Exactly
     }
 }
 

@@ -8,6 +8,7 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -21,6 +22,9 @@ from pathlib import Path
 from urllib.parse import unquote
 from socketserver import ThreadingMixIn
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ai.service import AssistantService  # noqa: E402  (the incident assistant, MonitoringConsole/ai)
+
 BASE           = Path(__file__).parent.parent.resolve()
 SETTINGS_FILE  = BASE / "monitoring_settings.json"
 STATE_FILE     = BASE / "logs" / "process_state.json"
@@ -28,6 +32,11 @@ PERF_STATE_FILE = BASE / "logs" / "performance_state.json"
 DISK_STATE_FILE = BASE / "logs" / "disk_state.json"
 NET_STATE_FILE   = BASE / "logs" / "network_state.json"
 DOC_STATE_FILE   = BASE / "logs" / "document_state.json"
+LOGS_DIR         = BASE / "logs"
+# Docker demo only (docker-compose.yml, profile "ai"): an Ollama container on the compose network.
+DEMO_OLLAMA_URL  = os.environ.get("DEMO_OLLAMA_URL", "").strip()
+DEMO_AI_MODEL    = os.environ.get("DEMO_AI_MODEL", "qwen2.5:3b").strip()                 # the assistant reads the state files and the log here
+TICKET_RE        = re.compile(r"^INC\d{7}$")
 PORT          = 5758
 # Off Windows (the Docker demo) the console is read-only: no tasklist live check, no
 # starting/stopping monitors, no launching the editor. It shows the state files it is given.
@@ -107,6 +116,58 @@ def is_same_origin(headers, port: int) -> bool:
         return False
     origin = headers.get("Origin")
     return origin is None or origin in {f"http://{h}" for h in allowed}
+
+
+_assistant = None
+
+
+def assistant() -> AssistantService:
+    """The incident assistant, created on first use (tests patch SETTINGS_FILE and LOGS_DIR first)."""
+    global _assistant
+    if _assistant is None or _assistant.settings_file != SETTINGS_FILE or _assistant.logs_dir != LOGS_DIR:
+        _assistant = AssistantService(SETTINGS_FILE, LOGS_DIR, **assistant_options())
+    return _assistant
+
+
+def assistant_options() -> dict:
+    """How the assistant runs here. On Windows: from the settings. In the Docker demo: rules, unless
+    DEMO_OLLAMA_URL points at the compose network's Ollama container. That host is another container,
+    not this machine, so allow_remote is set for it; its port is never published (docs/docker.md)."""
+    demo = DEMO_MODE or not IS_WINDOWS
+    if not demo:
+        return {"demo_mode": False}
+    if not DEMO_OLLAMA_URL:
+        return {"demo_mode": True}
+    return {"demo_mode": False,
+            "ai_overrides": {"enabled": True, "ollama_url": DEMO_OLLAMA_URL, "allow_remote": True,
+                             "model": DEMO_AI_MODEL, "fallback_model": None},
+            "unavailable_hint": "To use a local model in the demo: docker compose --profile ai up (docs/docker.md)."}
+
+
+def open_incidents() -> list:
+    """Every open incident the monitors listed in their state files (since v1.7.0)."""
+    out = []
+    for path in (STATE_FILE, PERF_STATE_FILE, DISK_STATE_FILE, NET_STATE_FILE, DOC_STATE_FILE):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+        except Exception:
+            continue
+        if isinstance(data, dict):
+            out += [i for i in data.get("incidents") or [] if isinstance(i, dict) and i.get("id")]
+    return out
+
+
+def ticket_file(number: str):
+    """logs/tickets/<number>.html, the ticket a monitor's email_draft wrote, or None."""
+    if not TICKET_RE.match(number or ""):
+        return None
+    try:
+        cfg = json.loads(SETTINGS_FILE.read_text(encoding="utf-8-sig"))
+        log_file = cfg.get("global", {}).get("log_file") or "logs\\monitor.log"
+    except Exception:
+        log_file = "logs\\monitor.log"
+    path = resolve_project_path(str(log_file).replace("\\", "/")).parent / "tickets" / f"{number}.html"
+    return path if path.is_file() else None
 
 
 def _log_action(message: str):
@@ -484,6 +545,7 @@ def get_status():
         "disks":         disk_state.get("drives", []),
         "network":       net_state.get("hosts", []),
         "documents":     documents,
+        "incidents":     open_incidents(),
         "config": {
             "meta":        cfg.get("_meta", {}),
             "global":      cfg.get("global", {}),
@@ -501,6 +563,9 @@ def get_status():
 
 
 
+AI_TASKS = {"explain": "explain", "ticket-draft": "ticket"}     # POST /api/ai/<route> -> assistant task
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -516,23 +581,44 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/status":
             body = json.dumps(get_status(), ensure_ascii=False).encode("utf-8")
             self._send(body, "application/json; charset=utf-8")
+        elif self.path.startswith(("/api/ai/", "/tickets/")):
+            # Traces and tickets hold incident data: same Host checks as the POST routes
+            # (a DNS-rebinding page must not read them).
+            if not is_same_origin(self.headers, self.server.server_address[1]):
+                return self._json(403, {"ok": False, "error": "Cross-origin request rejected"})
+            parts = self.path.split("?", 1)[0].strip("/").split("/")
+            if parts == ["api", "ai", "status"]:
+                self._json(*assistant().status())
+            elif len(parts) == 4 and parts[:3] == ["api", "ai", "runs"]:
+                self._json(*assistant().get_run(parts[3]))
+            elif len(parts) == 2 and parts[0] == "tickets" and ticket_file(parts[1]):
+                self._send(ticket_file(parts[1]).read_bytes(), "text/html; charset=utf-8")
+            else:
+                self.send_error(404)
         else:
             self.send_error(404)
 
     def do_POST(self):
         # Drain any body first so an early 403 is not turned into a
-        # connection reset on Windows. The API itself takes no body.
+        # connection reset on Windows. Only the /api/ai/ routes read it.
         try:
             length = min(int(self.headers.get("Content-Length", 0)), 64 * 1024)
         except ValueError:
             length = 0
-        if length > 0:
-            self.rfile.read(length)
+        raw = self.rfile.read(length) if length > 0 else b""
         if not is_same_origin(self.headers, self.server.server_address[1]):
             body = b'{"ok": false, "error": "Cross-origin request rejected"}'
             return self._send(body, "application/json; charset=utf-8", 403)
         parts = self.path.strip("/").split("/")
-        if parts == ["api", "open-editor"]:
+        if len(parts) == 3 and parts[:2] == ["api", "ai"] and parts[2] in AI_TASKS:
+            if "application/json" not in self.headers.get("Content-Type", ""):
+                return self._json(415, {"ok": False, "error": "Send JSON (Content-Type: application/json)"})
+            try:
+                data = json.loads(raw.decode("utf-8")) if raw else None
+            except ValueError:
+                data = None
+            self._json(*assistant().start(AI_TASKS[parts[2]], data))
+        elif parts == ["api", "open-editor"]:
             body = json.dumps(open_editor(), ensure_ascii=False).encode("utf-8")
             self._send(body, "application/json; charset=utf-8")
         elif len(parts) == 3 and parts[:2] == ["api", "monitors"] and parts[2] in ("start", "stop"):
@@ -546,6 +632,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(body, "application/json; charset=utf-8")
         else:
             self.send_error(404)
+
+    def _json(self, status: int, data: dict):
+        self._send(json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8", status)
 
     def _send(self, body: bytes, ctype: str, status: int = 200):
         self.send_response(status)

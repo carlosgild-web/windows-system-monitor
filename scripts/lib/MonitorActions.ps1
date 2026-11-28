@@ -17,7 +17,10 @@
                               after sustain_sec above the threshold and closes only after the value
                               stays below (threshold - clear margin) for clear_sec, so a value
                               hovering around the threshold is one incident, not many. Only the
-                              highest open or exceeded level acts.
+                              highest open or exceeded level acts. Each open incident keeps its
+                              start time and peak value.
+    - Get-OpenIncident     : the open incidents of one item, as the records every state file
+                              lists under "incidents" (read by the console's incident assistant).
 
     A monitor that shows a console window can set $MonitorActionTrace = $true after
     dot-sourcing to print one line per action; hidden monitors leave it off.
@@ -314,7 +317,10 @@ function Invoke-MonitorActions {
 
 # ---- Incidents with hysteresis ----------------------------------------------------
 function New-AlertTracker {
-    return @{ AboveSince = $null; ClearSince = $null; Active = $false; AlertCount = 0 }
+    # OpenedAt / ExceededSince / Peak / LastValue / SustainSec describe the open incident
+    # (Get-OpenIncident); they are cleared when it closes.
+    return @{ AboveSince = $null; ClearSince = $null; Active = $false; AlertCount = 0
+              OpenedAt = $null; ExceededSince = $null; Peak = $null; LastValue = $null; SustainSec = 0; Threshold = $null }
 }
 
 function Step-AlertTracker {
@@ -334,9 +340,13 @@ function Step-AlertTracker {
         if ($BelowClear) {
             if ($null -eq $Tracker.ClearSince) { $Tracker.ClearSince = $Now }
             if (($Now - $Tracker.ClearSince).TotalSeconds -ge $ClearSec) {
-                $Tracker.Active     = $false
-                $Tracker.ClearSince = $null
-                $Tracker.AlertCount = 0
+                $Tracker.Active        = $false
+                $Tracker.ClearSince    = $null
+                $Tracker.AlertCount    = 0
+                $Tracker.OpenedAt      = $null
+                $Tracker.ExceededSince = $null
+                $Tracker.Peak          = $null
+                $Tracker.LastValue     = $null
             }
         } else {
             # Between the clear point and the threshold: the incident stays open.
@@ -348,7 +358,10 @@ function Step-AlertTracker {
 
 function Invoke-ThresholdAlerts {
     # $Checks: one entry per threshold, lowest level first, each a hashtable with
-    #   Level, Actions, Exceeded, BelowClear, SustainSec, ClearSec, Vars.
+    #   Level, Actions, Exceeded, BelowClear, SustainSec, ClearSec, Vars, and optionally
+    #   Value (the measured number, $null when there is none, e.g. a host that does not
+    #   answer), Threshold (the configured limit) and Below (true when lower values are
+    #   worse, so the peak is the lowest value).
     # $Trackers: the item's persistent level -> tracker table (created on first use).
     # Returns the level that is currently open or exceeded (or $null).
     param([object[]]$Checks, [hashtable]$Trackers, [datetime]$Now, $GlobalCfg, [string]$KeyPrefix)
@@ -365,12 +378,66 @@ function Invoke-ThresholdAlerts {
     }
     foreach ($c in $Checks) {
         if ($c.Level -ne $top -or $decision[$c.Level] -eq 'none') { continue }
+        $tr = $Trackers[$c.Level]
+        if (-not $tr.Active) {
+            $tr.OpenedAt      = $Now
+            $tr.ExceededSince = if ($tr.AboveSince) { $tr.AboveSince } else { $Now }
+            $tr.SustainSec    = [double]$c.SustainSec
+            $tr.Peak          = $null
+        }
         Invoke-MonitorActions -Actions $c.Actions -Vars $c.Vars -GlobalCfg $GlobalCfg `
             -SuppressSpam:($decision[$c.Level] -eq 'repeat') -AlertKey "$KeyPrefix|$($c.Level)"
-        $Trackers[$c.Level].Active = $true
-        $Trackers[$c.Level].AlertCount++
+        $tr.Active = $true
+        $tr.AlertCount++
+    }
+    # Every open incident (also a lower level kept open under a higher one) follows the value.
+    foreach ($c in $Checks) {
+        $tr = $Trackers[$c.Level]
+        if (-not $tr.Active) { continue }
+        if ($c.ContainsKey('Threshold')) { $tr.Threshold = $c.Threshold }
+        if (-not $c.ContainsKey('Value') -or $null -eq $c.Value) { $tr.LastValue = $null; continue }
+        $v = [double]$c.Value
+        $tr.LastValue = $v
+        if ($null -eq $tr.Peak -or ($c.Below -and $v -lt $tr.Peak) -or (-not $c.Below -and $v -gt $tr.Peak)) { $tr.Peak = $v }
     }
     return $top
+}
+
+function ConvertTo-IncidentRecord {
+    # One entry of a state file's "incidents" list. id is "<monitor>:<target>:<level>".
+    param([string]$Monitor, [string]$Target, [string]$Level, $OpenedAt, $ExceededSince = $null,
+          [double]$SustainSec = 0, $Peak = $null, $LastValue = $null, $Threshold = $null, [int]$AlertCount = 0)
+    $fmt = 'yyyy-MM-dd HH:mm:ss'
+    return [ordered]@{
+        id             = "${Monitor}:${Target}:${Level}"
+        monitor        = $Monitor
+        target         = $Target
+        level          = $Level
+        opened_at      = if ($OpenedAt) { ([datetime]$OpenedAt).ToString($fmt) } else { $null }
+        exceeded_since = if ($ExceededSince) { ([datetime]$ExceededSince).ToString($fmt) } else { $null }
+        sustain_sec    = $SustainSec
+        threshold      = $Threshold
+        peak           = $Peak
+        last_value     = $LastValue
+        alert_count    = $AlertCount
+    }
+}
+
+function Get-OpenIncident {
+    # The open incidents of one item (its level -> tracker table), lowest level first.
+    # KeyPrefix is the same "<monitor>|<target>" given to Invoke-ThresholdAlerts.
+    param([hashtable]$Trackers, [string]$KeyPrefix)
+    if ($null -eq $Trackers) { return @() }
+    $monitor, $target = ([string]$KeyPrefix).Split('|', 2)
+    $out = @()
+    foreach ($level in @('warning', 'critical') + @($Trackers.Keys | Where-Object { $_ -notin 'warning', 'critical' })) {
+        $tr = $Trackers[$level]
+        if ($null -eq $tr -or -not $tr.Active) { continue }
+        $out += ConvertTo-IncidentRecord -Monitor $monitor -Target $target -Level $level -OpenedAt $tr.OpenedAt `
+            -ExceededSince $tr.ExceededSince -SustainSec ([double]$tr.SustainSec) -Peak $tr.Peak `
+            -LastValue $tr.LastValue -Threshold $tr.Threshold -AlertCount $tr.AlertCount
+    }
+    return $out
 }
 
 function Get-ThresholdsLowFirst ($Thresholds) {

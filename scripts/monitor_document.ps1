@@ -25,10 +25,13 @@ $hostname = $env:COMPUTERNAME
 
 function Write-DocumentStateFile ($Cfg, $Rows) {
     $stateFile = Join-Path (Split-Path $Cfg.global.log_file) 'document_state.json'
+    # Open incidents (Get-OpenIncident); a document's value is its percent of target.
+    $incidents = @(foreach ($k in @($docState.Keys | Sort-Object)) { Get-OpenIncident $docState[$k].Trackers "document|$k" })
     $payload = [ordered]@{
         updated     = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
         monitor_pid = $PID
         documents   = @($Rows)
+        incidents   = $incidents
     }
     try {
         $dir = Split-Path $stateFile -Parent
