@@ -17,6 +17,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Every state file lists its open incidents under `incidents`: id (`monitor:target:level`), when the value crossed
   the threshold, when the incident opened, sustain, threshold, peak, last value and alert count. Before, open
   incidents lived only in each monitor's memory. The Docker simulator writes the same list.
+- `MonitoringConsole/ai/`, the assistant's model layer, standard library only: `OllamaClient` (Ollama's `/api/chat`
+  with tools over `urllib`; refuses a remote URL unless allowed, never follows a redirect, ignores proxy settings,
+  times out every call), `DemoClient` (rules and templates, no model, labelled "Demo (rules, no AI)"),
+  `FakeClient` (scripted, for tests), and `choose_client`: the configured model, else the fallback model, else
+  the rules, with the reason.
 - Start / Stop monitoring buttons in the console's demo banner (`POST /api/monitors/start|stop`). They act on all
   five monitors of this install only, matched by full script path; the console and the editor keep running.
 - Document `measure: "file_size"`: watch a file's size in KB, MB or GB against a target. A file that does not exist
