@@ -20,6 +20,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   must match them). Tooling in `video/` (dev-only), ported from hl-bead-studio: storyboard, recorder, payload
   checks, labelled wait cuts. Poster, subtitles and a new social preview in `docs/showcase/`.
 
+### Changed
+- README to the portfolio standard: the GIF and the video first, a 3-line quick start, *What this demonstrates*,
+  *The problem*, *Before and after*, the invariants table (each with the file that enforces it and its test),
+  *Evaluation*, *Honest limitations*, counts from a real run (178 Python, 242 Pester). The old README GIF
+  (`docs/screenshots/demo.gif`) is replaced by `docs/showcase/demo.gif`.
+- A test checks that the five monitors and their libraries never call the model.
+
 ### Fixed
 - *Open incidents* shows each item once, at its highest open level (a warning stays open under a critical one).
 - *Draft with AI*: the ticket's Description no longer repeats the work notes (the email still carries both).

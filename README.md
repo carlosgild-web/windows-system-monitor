@@ -6,274 +6,228 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)
 ![PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1-5391FE)
-![Python](https://img.shields.io/badge/Python-3%20stdlib%20only-3776AB)
+![Python](https://img.shields.io/badge/Python-3%20stdlib%20only-3776AB?logo=python&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-000000?logo=ollama&logoColor=white)
 
-**A config-driven monitoring and auto-remediation toolkit for Windows.** Describe what to watch in one JSON file:
-processes, CPU, memory, disk, network, or a business metric from a spreadsheet. Background monitors
-check it on their own schedules, fire escalating actions when something crosses a threshold, and report to a
-live web dashboard.
+**For anyone who keeps a Windows PC or a small fleet running:** five PowerShell monitors watch processes, CPU,
+memory, disks, network and a business number in a spreadsheet, from one JSON file, and act when a threshold is
+crossed: a log line, a popup, a ServiceNow-style ticket with an email draft, a remediation script. When an
+incident opens, a small model running on the same PC (Ollama) explains it from the monitors' own data and drafts
+the ticket text, with tools that can only read. **The AI explains; the monitors decide.**
 
-![A tour of the console: overview, the demo guide, a process runbook, dark mode, and the settings editor](docs/screenshots/demo.gif)
+![An open critical budget incident; Explain shows the assistant's tool calls, its answer and the numbers checked against the monitors' data; then Draft with AI fills the ticket's text while the priority stays the rules'](docs/showcase/demo.gif)
 
----
+<sub>The GIF runs the real monitors, console and tools on a scripted model (the model's turns are fixed, and the
+console labels them "Scripted replay"); the video below runs a real one.</sub>
 
-## Highlights
+### The 2-minute video: a real model, under the hood
 
-- **One source of truth.** `monitoring_settings.json` defines every monitor, threshold and response. Every other
-  component reads it, and a browser-based editor writes it.
-- **Five independent monitors.** Each one runs in its own hidden PowerShell process, so a failure in one doesn't take down the others.
-- **Escalating actions without alert spam.** `log_to_file`, desktop `popup`, `email_draft` and `run_script`
-  remediation. Hysteresis keeps a value hovering at a threshold to one incident, popups and emails fire once per
-  incident, and an email cooldown caps drafts per alert; logging and remediation keep running while the problem lasts.
-  An email is never sent unattended: it first appears as a simulated ServiceNow-style incident ticket, where you
-  preview the message and then open it in your mail client.
-- **Live web console.** Merges the monitors' state files with a real-time process check, lets you pause and resume
-  each monitor, and shows a runbook for each failing process. Light and dark themes, and a built-in demo guide
-  ("How this demo works") for anyone trying it out.
-- **A local AI incident assistant.** *Explain* on an open incident: a small model running on the PC (Ollama)
-  reads the incident, the log and the runbook through read-only tools, then says what happened and what to do.
-  *Draft with AI* writes the ticket text. The AI explains; the monitors decide: thresholds, priorities and actions
-  stay in the config, every number in an answer is checked against the monitors' data, and the tools cannot change
-  anything. Off by default; without Ollama the same panel answers with rules. Evaluated on 21 scenarios, failures
-  included: [docs/eval/](docs/eval/README.md).
-- **Self-diagnosing.** `doctor.bat` checks the environment, config schema, paths and running monitors. The launcher
-  runs the same checks before starting anything, so a bad config fails loudly instead of silently.
-- **Tested.** 242 Pester tests and 175 Python tests on Windows PowerShell 5.1, plus a Docker smoke test on Linux,
-  in GitHub Actions.
-- **No dependencies beyond Windows and Python.** The web servers and the assistant use only the Python standard
-  library (the assistant talks to Ollama over HTTP).
+[![The video's poster: the Explain panel with the answer and the checked numbers, and the Under the hood panel](docs/showcase/poster.png)](docs/video.md)
+<!-- VIDEO_URL: replace the poster link above with the user-attachments URL of video/out/ollama/video-readme.mp4 -->
 
-## Screenshots
-
-| Live console | Dark mode | How this demo works |
-|---|---|---|
-| [![Console](docs/screenshots/console.png)](docs/screenshots/console.png) | [![Console in dark mode](docs/screenshots/console-dark.png)](docs/screenshots/console-dark.png) | [![The demo guide panel](docs/screenshots/console-guide.png)](docs/screenshots/console-guide.png) |
-
-| Process runbook | Settings editor |
-|---|---|
-| [![Runbook for a stopped process](docs/screenshots/console-runbook.png)](docs/screenshots/console-runbook.png) | [![Editor](docs/screenshots/editor.png)](docs/screenshots/editor.png) |
-
-## Architecture
-
-```mermaid
-flowchart LR
-    cfg[("monitoring_settings.json<br/><i>single source of truth</i>")]
-
-    subgraph monitors["Monitors (hidden PowerShell processes)"]
-        direction TB
-        p[process_monitor]
-        perf[performance_monitor]
-        d[monitor_disk]
-        n[monitor_network]
-        e[monitor_document]
-    end
-
-    subgraph actions["Actions"]
-        direction TB
-        log[log_to_file]
-        pop[popup]
-        mail[email_draft]
-        run["run_script<br/>(scripts/actions)"]
-    end
-
-    state[("logs/*_state.json<br/>logs/monitor.log")]
-    console["Web console<br/>monitoring_console.py :5758"]
-    editor["Settings editor<br/>server.py :5757"]
-    doctor[doctor.ps1]
-
-    cfg --> monitors
-    monitors -- "threshold crossed" --> actions
-    monitors -- "write state every cycle" --> state
-    state --> console
-    cfg --> console
-    console -. "pause / resume" .-> monitors
-    editor <--> cfg
-    doctor -. "validates" .-> cfg
-    doctor -. "checks freshness" .-> state
-```
-
-The monitors never talk to the console directly. Each one writes a small JSON state file. The console reads the
-files and treats a monitor as alive only if its file was updated within `2 × check interval + 15 s`. A
-crashed or hung monitor therefore shows up as stale; it can't look healthy.
+`qwen3:4b-instruct` on Ollama, on a CPU-only laptop, next to the code and the data behind each step. Recorded in two
+passes (the model ran alone first), with every wait labelled. **[What it shows, and is it real? →](docs/video.md)**
 
 ## Quick start
-
-**Requirements:** Windows 10/11, Windows PowerShell 5.1 (built in), and Python 3 on `PATH`.
-Microsoft Excel is optional: the document monitor reads CSV files without it, and needs Excel only for `.xlsx`.
 
 ```bat
 git clone https://github.com/carlosgild-web/windows-system-monitor.git
 cd windows-system-monitor
-
-doctor.bat             :: health check: environment, config, paths
-start_monitoring.bat   :: preflight, start all monitors, open the console at http://localhost:5758
-start_editor.bat       :: settings editor at http://localhost:5757
-stop_monitoring.bat    :: stop everything
+start_monitoring.bat
 ```
 
-The default config is a **test environment that works on any Windows PC**: Explorer and the Desktop Window Manager,
-CPU and RAM, the `C:` drive, two public DNS servers, and a made-up budget CSV, plus demo toggles. To see an alert end
-to end, open and then close **Notepad**: within about 30 seconds the console shows it as *NOT RUNNING* with an alert
-count, and `logs/monitor.log` records the event and its recovery. **[How to trigger every alert →](docs/test-environment.md)**
+No API key, no cloud and no installs beyond Windows and Python 3: the monitors are PowerShell 5.1, the console and
+the assistant are standard-library Python. The assistant is off by default and answers with rules ("Demo (rules,
+no AI)") until you turn it on with [Ollama](https://ollama.com) installed (see *Try it*).
 
-### Try it without Windows (Docker)
+Built by **Carlos Velazquez** · [LinkedIn](https://www.linkedin.com/in/carlos-v-90b99149) · open to AI engineering roles (remote)
 
-```bash
-docker compose up --build        # console: http://localhost:5758   editor: http://localhost:5757
+## What this demonstrates
+
+- **AIOps with guardrails:** a local LLM explains incidents and drafts tickets with four read-only tools; thresholds, priorities and actions stay in code and config ([`MonitoringConsole/ai/`](MonitoringConsole/ai/)).
+- **Tool calling without a framework or dependencies:** a bounded, traced loop on Ollama's `tools` API in standard-library Python, with a grounding gate: no answer is accepted before the data has been read ([`agent.py`](MonitoringConsole/ai/agent.py)).
+- **Grounded answers, tested against injection:** every number in an answer is checked against the tools' results; instructions planted in a process name, a document value and a log line are never obeyed ([`tests/python/test_ai_agent.py`](tests/python/test_ai_agent.py)).
+- **Evaluation, failures published:** 21 incident scenarios scored from traces; a scripted reference must pass in CI, and two runs on the real model are written up ([`docs/eval/`](docs/eval/README.md)).
+- **Windows automation depth:** five PowerShell 5.1 monitors, escalating actions with hysteresis, persisted incidents, a self-diagnosing doctor, 242 Pester tests.
+- **Secure local web apps:** localhost-only, same-origin APIs with CSRF and DNS-rebinding protection, in GitHub Actions on `windows-latest`, plus a Docker demo with an optional Ollama container.
+
+## The problem
+
+An alert says *what* crossed a line: "CPU above 95 % for 60 s", "Groceries budget used up". It rarely says *why*,
+or what the person on call should do first, and the ticket it opens is a template. After 18 years in network
+operations centers, that gap is the one I saw cost the most time: reading logs, finding the runbook, writing the
+ticket by hand. This project closes it without giving a model any control:
+
+- the monitors and the config decide when there is an incident, how severe it is, and what runs;
+- the assistant reads the incident, the log and the runbook, and explains them in plain words;
+- every number it writes is traced back to the monitors' data, and the ones that can't be are flagged;
+- it drafts the ticket's text; the ticket's priority, impact and urgency stay the rules'. Nothing is sent without your click.
+
+## Before and after
+
+| The ticket the rules wrote | After *Draft with AI* |
+|---|---|
+| [![A critical budget ticket with a raw template description](docs/showcase/ticket-rules.png)](docs/showcase/ticket-rules.png) | [![The same ticket with the short description, description and work notes written by the assistant, and the same priority](docs/showcase/ticket-ai-draft.png)](docs/showcase/ticket-ai-draft.png) |
+
+## The AI explains; the monitors decide
+
+Each rule is enforced in code and covered by a test:
+
+| # | Invariant | Enforced in | Test |
+|---|---|---|---|
+| 1 | Priority, impact, urgency, severity, category and group come from the rules, never the model | [`ai/ticket.py`](MonitoringConsole/ai/ticket.py) `code_fields` | `test_ai_agent.py` `test_ticket_priority_comes_from_the_level_not_the_model` |
+| 2 | The assistant's tools only read | [`ai/tools.py`](MonitoringConsole/ai/tools.py) `ToolRegistry` | `test_ai_agent.py` `test_running_every_tool_changes_no_file` |
+| 3 | Numbers in an answer come from tool results; untraced ones are flagged | [`ai/check.py`](MonitoringConsole/ai/check.py) `check_numbers` | `test_ai_agent.py` `test_untraced_numbers_are_flagged` |
+| 4 | Monitor data and file contents are data, never instructions | [`ai/agent.py`](MonitoringConsole/ai/agent.py) (tool results stay in `tool` messages) | `test_ai_agent.py` `InjectionTests` |
+| 5 | The model runs on this machine unless `ai.allow_remote` | [`ai/ollama.py`](MonitoringConsole/ai/ollama.py) `OllamaClient` | `test_ai_clients.py` `test_refuses_a_remote_ollama_unless_allowed` |
+| 6 | Every run is bounded and traced | [`ai/agent.py`](MonitoringConsole/ai/agent.py), [`ai/trace.py`](MonitoringConsole/ai/trace.py) | `test_ai_agent.py` `test_stops_at_max_model_calls_and_the_last_call_offers_no_tools` |
+| 7 | No answer is accepted before the incident and its runbook were read | [`ai/agent.py`](MonitoringConsole/ai/agent.py) `REQUIRED_READS` | `test_ai_agent.py` `test_an_answer_before_reading_the_data_is_not_used` |
+| 8 | The monitors never call the model | [`scripts/`](scripts/) (the console alone talks to Ollama) | `test_ai_agent.py` `test_the_monitors_never_call_the_model` |
+| 9 | Nothing is sent without the user's click | [`web/ticket.html`](web/ticket.html) (a `mailto:` draft) | `MonitorActions.Tests.ps1` `shows the email as a ticket preview that carries the mailto link` |
+
+## How it works
+
+```mermaid
+flowchart LR
+    cfg[("monitoring_settings.json<br/><i>thresholds, actions, runbooks</i>")]
+    subgraph monitors["Five monitors (hidden PowerShell)"]
+        m["process · performance · disk<br/>network · document"]
+    end
+    act["Actions: log, popup,<br/>ticket + email draft, script"]
+    state[("logs/*_state.json<br/><i>readings + open incidents</i>")]
+    console["Console :5758"]
+    agent["Assistant: bounded loop<br/>+ number check + gate"]
+    tools["4 read-only tools"]
+    ollama[("Ollama on this PC")]
+    cfg --> monitors
+    monitors -- "threshold crossed" --> act
+    monitors -- "every cycle" --> state
+    state --> console
+    console -- "Explain / Draft with AI" --> agent
+    agent <--> ollama
+    agent --> tools
+    tools -. "read" .-> state
+    tools -. "read" .-> cfg
 ```
 
-The real web console and settings editor, fed by simulated monitors. The banner says so. Why the monitors themselves
-can't run in a container is explained in **[docs/docker.md](docs/docker.md)**.
+- **The monitors** run on their own, open one incident per problem (hysteresis, sustain times, a spam guard and an
+  email cooldown), and write their readings and open incidents to state files. A monitor whose file stops updating
+  shows as stale, so a hung monitor can't look healthy.
+- **The assistant** (`MonitoringConsole/ai/`) runs only when you click: at most 5 model calls, a token budget, at most
+  4 tools per turn. Its tools read the incident, the log, the runbook and the item's settings (e-mail addresses
+  redacted). Without Ollama, the same panel answers with rules.
+- **The ticket** a critical alert opens is a simulated ServiceNow-style incident; *Draft with AI* fills its text on the
+  console's copy of it.
+- Design and trade-offs: **[docs/design-decisions.md](docs/design-decisions.md)**.
 
-### What the doctor reports
+## Evaluation
 
-Abbreviated output from a healthy system:
+21 incident scenarios: an explanation and a ticket for every monitor type, warning and critical, a closed incident,
+missing runbooks, a stale monitor, prompt injection three ways, and Spanish. Each run is scored from its trace.
 
-```text
-  Environment
-    [OK  ] PowerShell 5.1.26100
-    [OK  ] python on PATH  -  C:\Python314\python.exe
-  Config
-    [OK  ] Schema valid  -  All sections, thresholds and actions are well-formed
-  Paths
-    [OK  ] run_script on_cpu_critical.ps1  -  performance.cpu.thresholds[1]
-    [OK  ] Document file  -  sample_data\monthly_budget_sample.csv
-  Runtime
-    [OK  ] process monitor  -  PID 18660, state updated 13s ago
-    [OK  ] Console port 5758  -  in use by this project (PID 5652)
-  ============================================================
-   25 OK   0 WARN   0 FAIL
-```
-
-A broken config produces specific findings, and the exit code is the number of failures. For example:
-
-```text
-    [FAIL] performance.cpu.thresholds[0].percent  -  Must be a number between 1 and 100
-    [FAIL] network[1].protocol  -  'udp' must be icmp or tcp
-    [FAIL] run_script on_disk_critical.ps1  -  Not found: ...\on_disk_critical.ps1 (action is silently skipped)
-    [WARN] disk[0].thresholds[0].actions[0] (log_to_file)  -  Uses 'instructions'; disk actions should use 'message_template'
-```
-
-## Configuration at a glance
-
-```json
-"performance": {
-  "cpu": {
-    "check_interval_sec": 5,
-    "thresholds": [
-      { "level": "warning",  "percent": 80, "sustain_sec": 30,
-        "actions": [ { "type": "log_to_file", "level": "warning",
-                       "message_template": "[{timestamp}] WARNING CPU: {current_value}% for {sustain_sec}s" } ] },
-      { "level": "critical", "percent": 95, "sustain_sec": 60,
-        "actions": [ { "type": "log_to_file", "...": "..." },
-                     { "type": "email_draft", "to": "{global.email_recipient}", "...": "..." },
-                     { "type": "run_script",  "path": "{global.scripts_dir}\\actions\\on_cpu_critical.ps1",
-                       "args": ["--level", "critical", "--value", "{current_value}"] } ] }
-    ]
-  }
-}
-```
-
-| Monitor | Checks | Triggers on |
+| Run | Passed | Notes |
 |---|---|---|
-| Process | Required executables are running | Running ⇄ down transitions |
-| Performance | CPU % and RAM % | A level held for `sustain_sec` |
-| Disk | Percent used per drive | `percent_used` thresholds |
-| Network | ICMP ping or TCP connect | Latency (`latency_ms`) or `"unreachable"` |
-| Document | A list of documents: the sum of a filtered column in a `.csv` or `.xlsx`, or a file's size | Value `above` or `below` a percent of a target |
+| Scripted reference (CI) | 21 of 21 | Required on every push |
+| Rules, no AI | 19 of 21 | [Report](docs/eval/2026-11-28-rules-baseline-no-AI.md): fails only the Spanish scenarios |
+| qwen3:4b-instruct, run 1 | 17 of 21 | [Report](docs/eval/2026-11-28-qwen3-4b-instruct-2507-q4-K-M-run1.md): a left-out threshold, no "no runbook", English for Spanish |
+| qwen3:4b-instruct, run 2 | 16 of 21 | [Report](docs/eval/2026-11-28-qwen3-4b-instruct-2507-q4-K-M.md): after two prompt fixes; the misses moved |
 
-The full schema, template variables and action reference are in **[docs/configuration.md](docs/configuration.md)**.
+**The invariants held in every run:** grounding 20 of 20, ticket fields 7 of 7, injection 4 of 4, no side effects
+21 of 21. What the evaluation changed, including a bug it found in the number check: [docs/eval/](docs/eval/README.md).
 
-## Testing
+## Honest limitations
+
+- **The number check checks provenance, not meaning.** "Exceeded its target by 102 %" passes, because 102 is in the
+  data; the spend is *at* 102 %. That is why the answer is a draft for a person, and why priorities never come from
+  the model.
+- **A 4B model misses things:** it sometimes leaves out the threshold or forgets to say there is no runbook, and its
+  misses vary between runs (see *Evaluation*).
+- **Slow on a CPU-only laptop:** about 50 s per explanation, more on a cold start; raise `ai.timeout_sec` on slow machines.
+- **Windows only** for the monitors; the Docker image is a demo with simulated monitors ([docs/docker.md](docs/docker.md)).
+
+## Screenshots
+
+| Open incidents | Explain |
+|---|---|
+| [![Open incidents with an Explain button each](docs/showcase/console-incidents.png)](docs/showcase/console-incidents.png) | [![The Explain panel: answer, checked numbers, agent steps](docs/showcase/explain.png)](docs/showcase/explain.png) |
+| The agent's steps | Dark mode |
+| [![Each tool call and what it returned](docs/showcase/explain-steps.png)](docs/showcase/explain-steps.png) | [![The Explain panel in dark mode](docs/showcase/explain-dark.png)](docs/showcase/explain-dark.png) |
+| Phone width | Settings editor |
+| [![The incidents card at 390 px](docs/showcase/phone-incidents.png)](docs/showcase/phone-incidents.png) | [![The settings editor](docs/screenshots/editor.png)](docs/screenshots/editor.png) |
+
+## Try it
+
+**Requirements:** Windows 10/11, Windows PowerShell 5.1 (built in), Python 3 on `PATH`. Excel is optional (CSV
+documents don't need it). For the assistant's model: [Ollama](https://ollama.com).
+
+```bat
+doctor.bat                  :: health check: environment, config, paths, monitors, Ollama
+start_monitoring.bat        :: preflight, start the five monitors, open the console at http://localhost:5758
+start_editor.bat            :: settings editor at http://localhost:5757
+stop_monitoring.bat         :: stop everything
+start_monitoring.bat video  :: a clean scratch copy with the assistant on (used to record the showcase)
+```
+
+The default config is a **test environment for any Windows PC**: Explorer, CPU and RAM, `C:`, two public DNS
+servers, a made-up budget CSV and demo toggles. Close Notepad and an incident opens within 30 s; edit the budget CSV
+and a critical ticket opens. **[How to trigger every alert →](docs/test-environment.md)**
+
+### What each feature needs
+
+| Feature | Needs |
+|---|---|
+| Monitors, actions, console, editor, doctor | Windows, PowerShell 5.1, Python 3 |
+| Explain and Draft with AI, on rules | Nothing more (the default) |
+| Explain and Draft with AI, on a model | Ollama and `ollama pull qwen3:4b-instruct-2507-q4_K_M` (or `qwen2.5:3b` on 8 GB), then *Enabled* in the editor's Incident Assistant card |
+| Docker demo (simulated monitors) | `docker compose up --build`; add `--profile ai` for an Ollama container ([docs/docker.md](docs/docker.md)) |
+
+Configuration reference, including the `ai` section and runbooks: **[docs/configuration.md](docs/configuration.md)**.
+
+## Development
 
 ```powershell
-python -m unittest discover -s tests/python -v      # editor server, console, assistant, evaluation
-Invoke-Pester tests/powershell                      # requires Pester 5.5+
-python eval/assistant_eval.py --client ollama       # the assistant on the real local model (see docs/eval/)
+python -m unittest discover -s tests/python -v      # 178 tests: servers, console, assistant, evaluation
+Invoke-Pester tests/powershell                      # 242 tests (Pester 5.5+): monitors, actions, doctor, script rules
+python eval/assistant_eval.py                       # the 21 scenarios (scripted); --client ollama for the real model
 ```
 
-- **Static checks on every script:** it parses; no non-ASCII string literals (PowerShell 5.1 reads files as
-  Windows-1252); no assignments to automatic variables such as `$PID`; no `Set-StrictMode -Version Latest`;
-  every monitor handles every action type.
-- **Doctor:** each schema rule is tested by mutating the shipped config and checking for the expected failure.
-- **Editor server:** settings round-trip; CSRF and DNS-rebinding rejection; invalid bodies; path traversal on
-  `/api/open-file`.
-- **Console:** freshness windows, live-check override, and corrupt, missing or BOM-prefixed files.
-- **Incident assistant:** the tools have no side effects; runs stop at their call and token limits; prompt
-  injection through a process name, a document value and a log line; the ticket's priority never comes from the
-  model; the `/api/ai/` routes reject cross-origin and rebinding requests; 21 evaluation scenarios with a scripted
-  model must all pass.
+CI runs both suites, PSScriptAnalyzer and the doctor on `windows-latest`, and builds the Docker image and runs its
+smoke test on Linux. The showcase tooling is dev-only: `e2e/showcase/` (screenshots and GIF) and `video/` (the video;
+15 Node tests), both Playwright.
 
-[CI](.github/workflows/ci.yml) runs all of the above, plus PSScriptAnalyzer and the doctor, on `windows-latest`.
+| Folder | What's in it |
+|---|---|
+| `scripts/` | The five monitors, the launchers, the doctor, `lib/` (shared actions, incidents, readers) |
+| `MonitoringConsole/` | The console server and `ai/`: the assistant's clients, tools, loop, checks, traces |
+| `web/` | The console page, the ticket template, the shared theme and icons |
+| `eval/` | The assistant's evaluation; reports in `docs/eval/` |
+| `docker/` | The demo's simulator, entry point and smoke test |
+| `tests/` | Pester and Python suites |
+| `e2e/showcase/`, `video/` | How the README's images and video are made |
+| `docs/` | Configuration, design decisions, Docker, test guide, evaluation, video |
 
-## Project structure
+## How it was built
 
-```text
-├── monitoring_settings.json      # the single source of truth
-├── start_monitoring.bat          # preflight + launch all monitors + console
-├── stop_monitoring.bat
-├── start_editor.bat
-├── doctor.bat
-├── server.py                     # settings editor backend (stdlib HTTP server, :5757)
-├── monitoring_editor.html        # settings editor UI
-├── MonitoringConsole/
-│   ├── monitoring_console.py     # live dashboard backend (stdlib HTTP server, :5758)
-│   └── ai/                       # incident assistant: Ollama client, read-only tools, bounded loop, traces
-├── web/
-│   ├── console.html              # live dashboard page
-│   ├── ticket.html               # simulated incident ticket (email_draft), Draft with AI
-│   └── static/                   # shared theme (light/dark), SVG icons, served at /static/ by both servers
-├── scripts/
-│   ├── process_monitor.ps1       # one script per monitor
-│   ├── performance_monitor.ps1
-│   ├── monitor_disk.ps1
-│   ├── monitor_network.ps1
-│   ├── monitor_document.ps1
-│   ├── start_monitoring.ps1      # launcher with preflight
-│   ├── stop_monitoring.ps1
-│   ├── doctor.ps1
-│   ├── run_hidden.vbs            # windowless launch (see design notes)
-│   ├── actions/                  # sample run_script remediation handlers
-│   └── lib/                      # MonitorCommon, MonitorActions, DocumentReader, ActionHandler, Doctor
-├── sample_data/                  # made-up budget CSV (default) and a sample workbook
-├── docker/                       # demo container: simulator, entry point, smoke test
-├── Dockerfile, docker-compose.yml
-├── tests/                        # Pester + Python unittest suites
-├── eval/                         # the assistant's evaluation (21 scenarios)
-└── docs/                         # configuration reference, design decisions, evaluation reports, screenshots
-```
+I built this project with [Claude Code](https://claude.com/claude-code) as an AI coding assistant, phase by phase.
 
-## Design decisions
+**My part:** the requirements and the product decisions (the assistant reads but never acts, the ticket's priority
+stays the rules', the model runs locally), the plan for each phase, the evaluations on real models, and the review
+of every change.
 
-The short version (details and trade-offs in **[docs/design-decisions.md](docs/design-decisions.md)**):
+**Claude Code's part:** most of the code, under that direction, and the technical options it proposed and measured.
 
-- **Files as the integration layer.** Monitors write JSON state files and the console reads them. There's no broker
-  and no shared process, and staleness doubles as a heartbeat.
-- **PowerShell for collection, Python for the UI.** PowerShell 5.1 ships with every Windows install and has
-  first-class WMI/CIM and performance counters. Python's standard library provides a dependency-free web server.
-- **Fail loudly, run quietly.** Monitors run hidden and keep their loops alive, so the doctor and the launcher's preflight
-  make configuration problems visible *before* anything starts.
-- **Localhost-only, same-origin APIs.** Both servers bind to `localhost` and reject cross-origin or rebinding
-  requests, so a malicious web page can't rewrite the config or trigger actions.
-- **The AI explains; the monitors decide.** The assistant's tools only read, the code sets the ticket's
-  priority, the model runs on this machine, and no answer is accepted before the data has been read.
-- **Docker runs the demo, not the monitors.** The monitors depend on WMI, perf counters, Excel COM and the Windows
-  desktop, which a container is isolated from by design. The image runs the real console and editor with simulated
-  monitors instead. See [docs/docker.md](docs/docker.md).
+Every design decision and its trade-offs are in [docs/design-decisions.md](docs/design-decisions.md).
 
-## Roadmap
+## About
 
-- Read the workbook with `openpyxl` instead of Excel COM: no Office dependency, much faster cycles.
-- Optional SMTP delivery alongside the current `mailto:` drafts.
-- Run the monitors as a Windows service (e.g. via NSSM) instead of a logged-in session.
-- Cross-platform collectors (`psutil`) running on the host, so the containerized dashboard could show real data.
+A standalone AIOps project in my portfolio. Also: the Hilda & Luna series, AI tools for a fictional bead-making company:
 
-## More
+1. [local-rag-ollama](https://github.com/carlosgild-web/local-rag-ollama): fully local RAG with cited answers over versioned documents
+2. [luna-hybrid-agent](https://github.com/carlosgild-web/luna-hybrid-agent): an agent that picks between document search, read-only SQL and an FX API
+3. [hl-create-design](https://github.com/carlosgild-web/hl-create-design): KiCad projects with the company title block; the AI guides, the code decides
+4. [hl-bead-studio](https://github.com/carlosgild-web/hl-bead-studio): glass beads and charms from a sentence to CAD, drawing and render
 
-- ⚙️ [Configuration reference](docs/configuration.md)
-- 🧭 [Design decisions](docs/design-decisions.md)
-- 🧪 [Evaluating the incident assistant](docs/eval/README.md)
-- 📝 [Changelog](CHANGELOG.md)
+Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

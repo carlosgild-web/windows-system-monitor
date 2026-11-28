@@ -108,6 +108,19 @@ class RegistryTests(unittest.TestCase):
                           "urlopen", "socket", "smtplib", "\"w\"", "'w'", "\"a\"", "'a'", "mkdir"):
             self.assertNotIn(forbidden, src, forbidden)
 
+    def test_the_monitors_never_call_the_model(self):
+        # Invariant 8: the monitors decide on their own; only the console (and the doctor's health
+        # check, Doctor.psm1) talks to Ollama. The five monitors and every library they load:
+        monitors = ["process_monitor.ps1", "performance_monitor.ps1", "monitor_disk.ps1", "monitor_network.ps1",
+                    "monitor_document.ps1"]
+        libs = ["MonitorCommon.ps1", "MonitorActions.ps1", "DocumentReader.ps1", "Read-XlsxTotal.ps1", "ActionHandler.ps1"]
+        files = [ROOT / "scripts" / m for m in monitors] + [ROOT / "scripts" / "lib" / l for l in libs]
+        files += list((ROOT / "scripts" / "actions").glob("*.ps1"))
+        for ps in files:
+            text = ps.read_text(encoding="utf-8", errors="replace").lower()
+            for word in ("ollama", "11434", "/api/chat", "/api/generate", "/api/ai/"):
+                self.assertNotIn(word, text, f"{ps.name} mentions {word}")
+
     def test_running_every_tool_changes_no_file(self):
         before = self.p.snapshot()
         for name, args in (("get_incident", {"incident_id": CPU}),

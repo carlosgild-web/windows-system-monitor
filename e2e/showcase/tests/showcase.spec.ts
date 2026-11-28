@@ -63,6 +63,8 @@ test('screenshots for the README', async ({ page, browser }) => {
   await page.emulateMedia({ colorScheme: 'light' })
 
   await open(page, `/tickets/${TICKET}`)
+  await page.waitForTimeout(600)
+  await shot(page, 'ticket-rules')          // before: the ticket the rules wrote
   await draftWithAI(page)
   await page.waitForTimeout(400)
   await shot(page, 'ticket-ai-draft')
