@@ -316,8 +316,13 @@ for (const [kind, tag] of [['dry', '@dry'], ['ollama', '@ollama']] as const)
       await app.locator('body').evaluate(() => (window as any).fetchStatus())
       await cond.onEvent(cond.capture('incident', incident), false)
 
-      // 3: Explain, on the model, with the run's steps as they happen.
-      const row = app.locator('#inc-list .row', { hasText: 'notepad.exe' })
+      // 3: Explain the critical budget incident (B4 F1: an answer with numbers to check), on the
+      // model, with the run's steps as they happen.
+      const budgetWait = cond.now()
+      await expect.poll(async () => (await openIncidents(request)).some((i) => i.id === BUDGET), { timeout: 120_000, intervals: [1000] }).toBe(true)
+      if (cond.now() - budgetWait > 3000) cond.waits.push({ from_ms: budgetWait, to_ms: cond.now(), what: "the document monitor's next check" })
+      await app.locator('body').evaluate(() => (window as any).fetchStatus())
+      const row = app.locator('#inc-list .row', { hasText: 'Groceries spend' })
       await row.getByRole('button', { name: /Explain/ }).hover()
       await followRun(cond, page, request, 'explain', () => row.getByRole('button', { name: /Explain/ }).click(), !strict)
       await expect(app.locator('#ai-body .ai-answer')).toBeVisible()
@@ -332,7 +337,6 @@ for (const [kind, tag] of [['dry', '@dry'], ['ollama', '@ollama']] as const)
       const ticketWait = cond.now()
       await expect.poll(() => existsSync(ticketFile), { timeout: 120_000, intervals: [1000] }).toBe(true)
       if (cond.now() - ticketWait > 3000) cond.waits.push({ from_ms: ticketWait, to_ms: cond.now(), what: "the document monitor's next check" })
-      expect((await openIncidents(request)).some((i) => i.id === BUDGET)).toBe(true)
       await loadApp(page, `/tickets/${TICKET}`)
       await cond.show('4.1')
       await app.locator('#ai-draft').hover()

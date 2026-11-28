@@ -3,11 +3,12 @@
  "provider": "ollama",
  "banner": "Real model: {model} (Ollama, on this PC)",
  "mode": "flexible",
- "hold": 0.6,
+ "hold": 0.95,
  "notes": [
   "Rows are shown by the recorder's scenes (record.spec.ts). Rows with \"on\" wait for a captured event: a step of the assistant's run (GET /api/ai/runs/{id}), the run's start or its end.",
   "Payloads come only from the capture (events.json); cues.mjs checks them. Callouts are [file, symbol], resolved by lines.mjs at take time.",
-  "Flexible mode: a real model's steps vary; a row that never matched is listed in take.json, and unforeseen tool calls get at most VIDEO_MAX_GENERIC generic rows."
+  "Flexible mode: a real model's steps vary; a row that never matched is listed in take.json, and unforeseen tool calls get at most VIDEO_MAX_GENERIC generic rows.",
+  "B4 F1: Explain runs on the critical budget incident (numbers to check, a runbook); the Notepad scene shows a monitor opening one incident."
  ],
  "rows": [
   {
@@ -72,7 +73,7 @@
     "event": "request",
     "task": "explain"
    },
-   "subtitle": "Explain: a small model on this PC, with four tools that can only read.",
+   "subtitle": "Explain the critical one: a small model on this PC, with four tools that can only read.",
    "callouts": [
     [
      "MonitoringConsole/ai/tools.py",
@@ -88,7 +89,7 @@
     "event": "tool",
     "name": "get_incident"
    },
-   "subtitle": "It reads the incident: what crossed the line, since when, and whether the monitor is still alive.",
+   "subtitle": "It reads the incident: the value, the threshold, since when, and whether the monitor is alive.",
    "payload": {
     "label": "tool result: get_incident",
     "pick": "result"
@@ -181,7 +182,7 @@
    "id": "4.1",
    "scene": 4,
    "layer": "Ticket",
-   "subtitle": "A critical budget alert opened this ticket. Its priority comes from the rules.",
+   "subtitle": "The same budget alert opened a ticket. Its priority comes from the rules.",
    "callouts": [
     [
      "MonitoringConsole/ai/ticket.py",
