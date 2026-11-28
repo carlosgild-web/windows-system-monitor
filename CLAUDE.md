@@ -108,7 +108,9 @@ Modules: `base.py` (the `ChatClient` interface; the first user message is `task_
 parses), `settings.py`, `ollama.py`, `demo.py`, `fake.py`, `factory.py` (`choose_client`: model, else fallback, else
 rules), `tools.py` (the four `get_*` tools and `ToolRegistry`, which validates every argument), `agent.py` (the
 loop), `check.py` (the number check), `ticket.py` (the code-owned ticket fields; same table as `web/ticket.html`, a
-test keeps them equal), `trace.py`. `DemoClient` depends on the tool names, arguments and result shapes: change
+test keeps them equal), `trace.py`, `service.py` (`AssistantService`: what the `/api/ai/*` routes call; one run
+at a time in a background thread; the active run's trace is served from memory, because on Windows a poll that
+opens the trace file makes the run's `os.replace` fail). `DemoClient` depends on the tool names, arguments and result shapes: change
 them together. `tools.py` must not import anything that writes, spawns or connects (a test greps for it).
 
 **Invariants (each has a test):**

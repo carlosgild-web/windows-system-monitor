@@ -28,6 +28,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   per turn; a number check on the answer; the ticket's priority, impact, urgency, severity, category and group set
   by code; a hand-over to the rules when the model fails; a JSON trace per run in `logs/ai_traces/` (rotated).
   Tested against prompt injection through a process name, a document name and a log line.
+- Console API for the assistant: `POST /api/ai/explain` and `POST /api/ai/ticket-draft` (JSON
+  `{"incident_id", "language": "en"|"es"}`, answer 202 with a run id), `GET /api/ai/runs/{id}` (poll until the
+  status is not `running`) and `GET /api/ai/status` (which client will answer, and why). One run at a time (409
+  otherwise). Every `/api/ai/` route, GETs included, has the same Host/Origin checks as the other POSTs, and the
+  POSTs require `Content-Type: application/json`. `/api/status` now lists the open `incidents`, and the console
+  serves a monitor's ticket at `/tickets/<number>`. The Docker image includes the assistant (rules only).
 - Start / Stop monitoring buttons in the console's demo banner (`POST /api/monitors/start|stop`). They act on all
   five monitors of this install only, matched by full script path; the console and the editor keep running.
 - Document `measure: "file_size"`: watch a file's size in KB, MB or GB against a target. A file that does not exist

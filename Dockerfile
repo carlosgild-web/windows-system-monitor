@@ -20,6 +20,7 @@ RUN useradd --create-home --uid 10001 demo && mkdir -p /app/logs && chown demo:d
 
 COPY --chown=demo:demo monitoring_settings.json server.py monitoring_editor.html ./
 COPY --chown=demo:demo MonitoringConsole/monitoring_console.py MonitoringConsole/
+COPY --chown=demo:demo MonitoringConsole/ai/*.py MonitoringConsole/ai/
 COPY --chown=demo:demo web/ web/
 COPY --chown=demo:demo sample_data/monthly_budget_sample.csv sample_data/
 COPY --chown=demo:demo docker/simulator.py docker/run_demo.py docker/

@@ -20,11 +20,27 @@ def get(url):
         return r.status, r.headers.get("Content-Type", ""), r.read()
 
 
-def post(url):
+def post(url, body=None):
     """Same-origin POST, as the console page sends it."""
-    req = urllib.request.Request(url, data=b"", method="POST", headers={"Origin": CONSOLE})
+    data = json.dumps(body).encode() if body is not None else b""
+    headers = {"Origin": CONSOLE}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, method="POST", headers=headers)
     with urllib.request.urlopen(req, timeout=5) as r:
         return json.loads(r.read())
+
+
+def assistant_run(task, incident_id, timeout=30):
+    """Starts an assistant run and polls it to the end, as the console page will."""
+    run_id = post(CONSOLE + "/api/ai/" + task, {"incident_id": incident_id})["run_id"]
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        run = json.loads(get(CONSOLE + "/api/ai/runs/" + run_id)[2])["run"]
+        if run["status"] != "running":
+            return run
+        time.sleep(0.5)
+    raise SystemExit(f"FAIL: assistant run {run_id} still running after {timeout}s")
 
 
 def wait_for_status(timeout=60):
@@ -66,6 +82,18 @@ def main():
           "the file-size document is reported")
     editor_row = next(h for h in s["network"] if h["port"] == 5757)
     check(editor_row["reachable"], "the settings editor row is online (real check)")
+
+    doc_incident = next((i for i in s.get("incidents", []) if i["monitor"] == "document"), None)
+    check(doc_incident is not None and doc_incident["level"] == "warning",
+          "the state files list open incidents (the groceries warning)")
+    ai = json.loads(get(CONSOLE + "/api/ai/status")[2])
+    check(ai["client"]["label"] == "Demo (rules, no AI)", "the assistant runs on rules in the container")
+    run = assistant_run("explain", doc_incident["id"])
+    check(run["status"] == "done" and run["check"]["ok"] and "340.15" in json.dumps(run["steps"]),
+          "Explain answers from the tool results, every number traced")
+    run = assistant_run("ticket-draft", doc_incident["id"])
+    check(run["status"] == "done" and run["ticket"]["priority"] == "3 - Moderate",
+          "the AI ticket draft keeps the code-owned priority")
 
     stop = post(CONSOLE + "/api/monitors/stop")
     check(stop["ok"] is False and "Windows" in stop["error"], "the banner's stop monitoring is refused in the container")

@@ -110,9 +110,12 @@ class AssistantRun:
 
     # ---- trace -----------------------------------------------------------------------
     def _save(self) -> None:
-        self.store.save(self.trace)
         if self.on_save:
             self.on_save(self.trace)
+        try:
+            self.store.save(self.trace)
+        except OSError as exc:      # the run goes on; the console still has the in-memory copy
+            self.trace["save_error"] = f"{type(exc).__name__}: {exc}"
 
     def _step(self, kind: str, **data: Any) -> None:
         self.trace["steps"].append(dict({"n": len(self.trace["steps"]) + 1, "type": kind, "at": _now()}, **data))

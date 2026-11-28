@@ -31,6 +31,14 @@ LIKELY_CAUSES = {
 }
 
 
+UNITS = {"performance": "%", "disk": "% used", "network": " ms", "document": "% of target"}
+
+
+def _val(inc: Dict[str, Any], key: str) -> str:
+    """A measured number with the unit of its monitor (the records carry bare numbers)."""
+    return _fmt(inc[key]) + UNITS.get(str(inc.get("monitor")), "")
+
+
 def _fmt(v: Any) -> str:
     if isinstance(v, bool) or v is None:
         return str(v)
@@ -67,11 +75,11 @@ def _what_happened(inc: Dict[str, Any]) -> List[str]:
     lines = [f"{who} has an open {inc.get('level')} incident."]
     facts = []
     if inc.get("last_value") is not None:
-        facts.append(f"last value {_fmt(inc['last_value'])}")
+        facts.append(f"last value {_val(inc, 'last_value')}")
     if inc.get("threshold") is not None:
-        facts.append(f"threshold {_fmt(inc['threshold'])}")
+        facts.append(f"threshold {_val(inc, 'threshold')}")
     if inc.get("peak") is not None:
-        facts.append(f"peak {_fmt(inc['peak'])}")
+        facts.append(f"peak {_val(inc, 'peak')}")
     if inc.get("monitor") == "network" and inc.get("last_value") is None:
         facts.append("the host does not answer")
     if inc.get("monitor") == "process":
@@ -148,7 +156,7 @@ class DemoClient(ChatClient):
     def _ticket(self, inc: Dict[str, Any], steps: List[str], events: List[str]) -> Dict[str, str]:
         short = f"{str(inc.get('level', '')).capitalize()}: {inc.get('target')} ({inc.get('monitor')})"
         if inc.get("last_value") is not None and inc.get("threshold") is not None:
-            short += f" at {_fmt(inc['last_value'])}, threshold {_fmt(inc['threshold'])}"
+            short += f" at {_val(inc, 'last_value')}, threshold {_val(inc, 'threshold')}"
         elif inc.get("monitor") == "network":
             short += " unreachable"
         elif inc.get("monitor") == "process":

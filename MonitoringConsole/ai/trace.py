@@ -9,11 +9,13 @@ import json
 import os
 import re
 import secrets
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 RUN_ID_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{8}$")
+REPLACE_RETRIES = 40          # x 50 ms
 
 
 class TraceStore:
@@ -35,13 +37,27 @@ class TraceStore:
         path = self.path(trace["id"])
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(trace, indent=2, ensure_ascii=False), encoding="utf-8")
-        os.replace(tmp, path)
+        # On Windows the rename fails while another thread has the file open (a poll
+        # reading it): retry briefly instead of losing the step.
+        for attempt in range(REPLACE_RETRIES):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == REPLACE_RETRIES - 1:
+                    raise
+                time.sleep(0.05)
 
     def load(self, run_id: str) -> Optional[Dict[str, Any]]:
-        try:
-            return json.loads(self.path(run_id).read_text(encoding="utf-8"))
-        except (ValueError, OSError):
-            return None
+        path = self.path(run_id)
+        for attempt in range(REPLACE_RETRIES):
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except PermissionError:
+                time.sleep(0.05)
+            except (ValueError, OSError):
+                return None
+        return None
 
     def rotate(self) -> int:
         """Deletes the oldest traces beyond max_traces. Returns how many were deleted."""
