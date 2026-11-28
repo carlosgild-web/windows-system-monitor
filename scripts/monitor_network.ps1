@@ -9,12 +9,13 @@ $ErrorActionPreference = 'Continue'
 
 # ── State file ────────────────────────────────────────────────────────────────
 function Write-NetStateFile {
-    param($Cfg, $Hosts)
+    param($Cfg, $Hosts, $Incidents = @())
     $stateFile = Join-Path (Split-Path $Cfg.global.log_file) 'network_state.json'
     $payload = [ordered]@{
         updated     = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
         monitor_pid = $PID
         hosts       = $Hosts
+        incidents   = @($Incidents)      # open incidents (Get-OpenIncidents)
     }
     try { $payload | ConvertTo-Json -Depth 5 | Set-Content $stateFile -Encoding UTF8 } catch {}
 }
@@ -138,6 +139,8 @@ while ($true) {
                 BelowClear = $belowClear
                 SustainSec = 0
                 ClearSec   = (Get-ClearSetting $t 'clear_sec' $interval)
+                Value      = $latency      # $null while the host does not answer
+                Threshold  = if ($null -ne $t.latency_ms) { [double]$t.latency_ms } else { $null }
                 Vars       = @{
                     timestamp     = $now.ToString('yyyy-MM-dd HH:mm:ss')
                     hostname      = $hostname
@@ -166,7 +169,8 @@ while ($true) {
     }
 
     if ($stateChanged -and $hostsOutput.Count -gt 0) {
-        Write-NetStateFile -Cfg $cfg -Hosts $hostsOutput
+        $incidents = @(foreach ($h in $cfg.network) { Get-OpenIncidents $state[$h.name].Trackers "network|$($h.name)" })
+        Write-NetStateFile -Cfg $cfg -Hosts $hostsOutput -Incidents $incidents
     }
 
     Start-Sleep -Seconds 1

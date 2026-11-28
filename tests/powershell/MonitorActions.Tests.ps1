@@ -335,6 +335,7 @@ Describe 'Invoke-ThresholdAlerts' {
                 @{
                     Level = $t.Level; Actions = $actions; SustainSec = 30; ClearSec = 30
                     Exceeded = ($Value -ge $t.Pct); BelowClear = ($Value -lt ($t.Pct - 5))
+                    Value = $Value; Threshold = [double]$t.Pct
                     Vars = @{ current_value = [string]$Value }
                 }
             }
@@ -402,5 +403,92 @@ Describe 'Invoke-ThresholdAlerts' {
         $trackers = @{}
         Invoke-RamSeries (@(96) * 7 + @(70) * 12 + @(96) * 7) $trackers $t0 $g
         Should -Invoke Open-TicketWindow -Times 2 -Exactly
+    }
+}
+
+Describe 'Open incidents (Get-OpenIncidents)' {
+    BeforeAll {
+        function New-Check ([string]$Level, [double]$Pct, $Value, [switch]$Below) {
+            $exceeded = if ($null -eq $Value) { $true } elseif ($Below) { $Value -lt $Pct } else { $Value -ge $Pct }
+            $clear    = if ($null -eq $Value) { $false } elseif ($Below) { $Value -ge ($Pct + 5) } else { $Value -lt ($Pct - 5) }
+            @{
+                Level = $Level; SustainSec = 30; ClearSec = 0; Exceeded = $exceeded; BelowClear = $clear
+                Value = $Value; Threshold = $Pct; Below = [bool]$Below
+                Actions = @([pscustomobject]@{ type = 'log_to_file'; level = $Level; message_template = "$Level {current_value}" })
+                Vars = @{ current_value = [string]$Value }
+            }
+        }
+    }
+
+    BeforeEach {
+        $g  = New-GlobalCfg (Join-Path (Join-Path $TestDrive ([guid]::NewGuid())) 'monitor.log')
+        $t0 = Get-Date '2026-11-14 10:00:00'
+        $tr = @{}
+    }
+
+    It 'lists nothing until sustain_sec has passed' {
+        $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 97) -Trackers $tr -Now $t0 -GlobalCfg $g -KeyPrefix 'performance|cpu'
+        @(Get-OpenIncidents $tr 'performance|cpu') | Should -BeNullOrEmpty
+    }
+
+    It 'records the start, the sustain, the threshold and the peak of an open incident' {
+        foreach ($s in 0, 10, 20, 30, 40, 50) {
+            $v = @{ 0 = 96; 10 = 97; 20 = 96; 30 = 98.5; 40 = 99.1; 50 = 97.2 }[$s]
+            $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 $v) -Trackers $tr -Now $t0.AddSeconds($s) -GlobalCfg $g -KeyPrefix 'performance|cpu'
+        }
+        $inc = @(Get-OpenIncidents $tr 'performance|cpu')
+        $inc.Count             | Should -Be 1
+        $inc[0].id             | Should -Be 'performance:cpu:critical'
+        $inc[0].monitor        | Should -Be 'performance'
+        $inc[0].target         | Should -Be 'cpu'
+        $inc[0].exceeded_since | Should -Be '2026-11-14 10:00:00'
+        $inc[0].opened_at      | Should -Be '2026-11-14 10:00:30'
+        $inc[0].sustain_sec    | Should -Be 30
+        $inc[0].threshold      | Should -Be 95
+        $inc[0].peak           | Should -Be 99.1
+        $inc[0].last_value     | Should -Be 97.2
+        $inc[0].alert_count    | Should -Be 3
+    }
+
+    It 'forgets the incident when it closes, and starts fresh on the next one' {
+        $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 99) -Trackers $tr -Now $t0 -GlobalCfg $g -KeyPrefix 'disk|C:\'
+        $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 99) -Trackers $tr -Now $t0.AddSeconds(30) -GlobalCfg $g -KeyPrefix 'disk|C:\'
+        $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 50) -Trackers $tr -Now $t0.AddSeconds(40) -GlobalCfg $g -KeyPrefix 'disk|C:\'
+        @(Get-OpenIncidents $tr 'disk|C:\') | Should -BeNullOrEmpty
+        $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 96) -Trackers $tr -Now $t0.AddSeconds(100) -GlobalCfg $g -KeyPrefix 'disk|C:\'
+        $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 96) -Trackers $tr -Now $t0.AddSeconds(130) -GlobalCfg $g -KeyPrefix 'disk|C:\'
+        $inc = @(Get-OpenIncidents $tr 'disk|C:\')
+        $inc[0].id        | Should -Be 'disk:C:\:critical'
+        $inc[0].peak      | Should -Be 96
+        $inc[0].opened_at | Should -Be '2026-11-14 10:02:10'
+    }
+
+    It 'takes the lowest value as the peak of a "below" threshold' {
+        foreach ($s in 0, 30, 60) {
+            $v = @{ 0 = 70; 30 = 55; 60 = 62 }[$s]
+            $null = Invoke-ThresholdAlerts -Checks @(New-Check 'warning' 80 $v -Below) -Trackers $tr -Now $t0.AddSeconds($s) -GlobalCfg $g -KeyPrefix 'document|Sales'
+        }
+        @(Get-OpenIncidents $tr 'document|Sales')[0].peak | Should -Be 55
+    }
+
+    It 'keeps a null value (an unreachable host) without a peak' {
+        foreach ($s in 0, 30) {
+            $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 0 $null) -Trackers $tr -Now $t0.AddSeconds($s) -GlobalCfg $g -KeyPrefix 'network|Internet'
+        }
+        $inc = @(Get-OpenIncidents $tr 'network|Internet')[0]
+        $inc.id         | Should -Be 'network:Internet:critical'
+        $inc.peak       | Should -BeNullOrEmpty
+        $inc.last_value | Should -BeNullOrEmpty
+    }
+
+    It 'serializes to the JSON the state files carry' {
+        foreach ($s in 0, 30) {
+            $null = Invoke-ThresholdAlerts -Checks @(New-Check 'critical' 95 97) -Trackers $tr -Now $t0.AddSeconds($s) -GlobalCfg $g -KeyPrefix 'performance|memory'
+        }
+        $json = [ordered]@{ incidents = @(Get-OpenIncidents $tr 'performance|memory') } | ConvertTo-Json -Depth 5 | ConvertFrom-Json
+        @($json.incidents).Count | Should -Be 1
+        $json.incidents[0].level | Should -Be 'critical'
+        @($json.incidents[0].PSObject.Properties.Name) | Should -Be @('id', 'monitor', 'target', 'level', 'opened_at', 'exceeded_since',
+            'sustain_sec', 'threshold', 'peak', 'last_value', 'alert_count')
     }
 }

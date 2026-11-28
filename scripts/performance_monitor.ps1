@@ -23,10 +23,13 @@ function Write-PerfStateFile {
             }
         }
     )
+    # Open incidents (see Get-OpenIncidents), read by the console's incident assistant.
+    $incidents = @(foreach ($m in $MetricDefs) { Get-OpenIncidents $State[$m.Name].Trackers "performance|$($m.Name)" })
     $payload = [ordered]@{
         updated     = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
         monitor_pid = $PID
         metrics     = $metrics
+        incidents   = $incidents
     }
     try { $payload | ConvertTo-Json -Depth 5 | Set-Content $stateFile -Encoding UTF8 } catch {}
 }
@@ -112,6 +115,8 @@ while ($true) {
                 BelowClear = ($value -lt ($t.percent - (Get-ClearSetting $t 'clear_margin' 5)))
                 SustainSec = $sustain
                 ClearSec   = (Get-ClearSetting $t 'clear_sec' ([math]::Max($sustain, [double]$mcfg.check_interval_sec)))
+                Value      = $value
+                Threshold  = [double]$t.percent
                 Vars       = @{
                     timestamp     = $now.ToString('yyyy-MM-dd HH:mm:ss')
                     hostname      = $hostname

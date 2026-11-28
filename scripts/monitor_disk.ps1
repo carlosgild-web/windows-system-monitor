@@ -9,12 +9,13 @@ $ErrorActionPreference = 'Continue'
 
 # ── State file ────────────────────────────────────────────────────────────────
 function Write-DiskStateFile {
-    param($Cfg, $Drives)
+    param($Cfg, $Drives, $Incidents = @())
     $stateFile = Join-Path (Split-Path $Cfg.global.log_file) 'disk_state.json'
     $payload = [ordered]@{
         updated     = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
         monitor_pid = $PID
         drives      = $Drives
+        incidents   = @($Incidents)      # open incidents (Get-OpenIncidents)
     }
     try { $payload | ConvertTo-Json -Depth 5 | Set-Content $stateFile -Encoding UTF8 } catch {}
 }
@@ -114,6 +115,8 @@ while ($true) {
                 BelowClear = ($info.PercentUsed -lt ($t.percent_used - (Get-ClearSetting $t 'clear_margin' 2)))
                 SustainSec = 0
                 ClearSec   = (Get-ClearSetting $t 'clear_sec' $interval)
+                Value      = [double]$info.PercentUsed
+                Threshold  = [double]$t.percent_used
                 Vars       = @{
                     timestamp     = $now.ToString('yyyy-MM-dd HH:mm:ss')
                     hostname      = $hostname
@@ -137,7 +140,8 @@ while ($true) {
     }
 
     if ($stateChanged -and $drivesOutput.Count -gt 0) {
-        Write-DiskStateFile -Cfg $cfg -Drives $drivesOutput
+        $incidents = @(foreach ($d in $cfg.disk) { Get-OpenIncidents $state[$d.drive].Trackers "disk|$($d.drive)" })
+        Write-DiskStateFile -Cfg $cfg -Drives $drivesOutput -Incidents $incidents
     }
 
     Start-Sleep -Seconds 1

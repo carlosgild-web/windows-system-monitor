@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- **Incident assistant, part 1: settings and data** (the assistant itself follows in this release). A new optional
+  `ai` section (`enabled` is false in the shipped file): a local Ollama URL, which must be this machine unless
+  `allow_remote` is true, plus the model, a fallback model, a timeout, a model-call limit, a token budget and the
+  number of traces kept. The doctor validates it and, when it is enabled, checks that Ollama answers and the model is
+  pulled (`WARN` at most, never `FAIL`). The settings editor has an *Incident Assistant (local AI)* card.
+- Thresholds can carry an optional `runbook` text (numbered steps), editable in the editor. The shipped critical
+  CPU, memory, disk, network and budget thresholds have one.
+- Every state file lists its open incidents under `incidents`: id (`monitor:target:level`), when the value crossed
+  the threshold, when the incident opened, sustain, threshold, peak, last value and alert count. Before, open
+  incidents lived only in each monitor's memory. The Docker simulator writes the same list.
 - Start / Stop monitoring buttons in the console's demo banner (`POST /api/monitors/start|stop`). They act on all
   five monitors of this install only, matched by full script path; the console and the editor keep running.
 - Document `measure: "file_size"`: watch a file's size in KB, MB or GB against a target. A file that does not exist

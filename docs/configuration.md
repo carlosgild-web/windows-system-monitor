@@ -19,6 +19,7 @@ folder, so the repository works wherever it is cloned.
 {
   "_meta":       { version, last_updated, description, update_notes },
   "global":      { ...defaults shared by every monitor... },
+  "ai":          { ...the incident assistant (optional, off by default)... },
   "processes":   [ ...executables that must be running... ],
   "performance": { "cpu": {...}, "memory": {...} },
   "disk":        [ ...drives... ],
@@ -39,6 +40,51 @@ folder, so the repository works wherever it is cloned.
 | `email_sender` | string | Informational. |
 | `email_cooldown_min` | number >= 0 | At most one `email_draft` per item and level within this many minutes (default 60, `0` = off). See [Incidents, spam guard and email cooldown](#incidents-spam-guard-and-email-cooldown). |
 | `scripts_dir` | path | Available to templates as `{global.scripts_dir}`. |
+
+## `ai` (incident assistant, v1.7.0)
+
+Optional. A local [Ollama](https://ollama.com) model explains one incident and drafts the ticket text, using
+read-only tools over the state files, the log and this file. It decides nothing: levels, priorities and actions
+always come from the settings. Without this section, or with `enabled: false`, *Explain* uses the rules, no AI.
+See [design decisions 10-12](design-decisions.md#10-the-ai-explains-the-monitors-decide).
+
+```json
+"ai": {
+  "enabled": false,
+  "ollama_url": "http://localhost:11434",
+  "allow_remote": false,
+  "model": "qwen3:4b-instruct-2507-q4_K_M",
+  "fallback_model": "qwen2.5:3b",
+  "timeout_sec": 90,
+  "max_model_calls": 5,
+  "token_budget": 12000,
+  "max_traces": 200
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | bool | Turns the assistant on. `false` in the shipped file. |
+| `ollama_url` | http(s) URL | Where Ollama listens. Must be this machine (`localhost`, `127.x.x.x`, `::1`) unless `allow_remote` is `true`. |
+| `allow_remote` | bool | Allows another host. Incident data then leaves this PC, and the doctor says so (`WARN`). |
+| `model` | string | Ollama model tag. The default has native tool calling. |
+| `fallback_model` | string, optional | Used when `model` is not pulled, for example `qwen2.5:3b` on an 8 GB machine. |
+| `timeout_sec` | number > 0 | Timeout for each model call. |
+| `max_model_calls` | whole number 1-20 | Model calls per run. A run stops at this limit. |
+| `token_budget` | whole number >= 500 | Prompt plus output tokens per run. |
+| `max_traces` | whole number >= 1 | Run traces kept in `logs/ai_traces/` (oldest deleted first). |
+
+The doctor validates the section (any error is a `FAIL`) and, when the assistant is enabled, checks that Ollama
+answers and the model is pulled. That check is a `WARN` at most, never a `FAIL`: the monitors work without the
+assistant.
+
+**Runbooks.** Any threshold (CPU, memory, disk, network, document) can carry an optional `runbook` text: what to do
+when it fires, as numbered steps. The assistant reads it with its `get_runbook` tool and cites it. Processes keep
+their runbook in the `instructions` of their `on_not_running` action, as before.
+
+```json
+{ "level": "critical", "percent_used": 90, "runbook": "1. Run Disk Cleanup...\n2. ...", "actions": [ ... ] }
+```
 
 ## `processes[]`
 
@@ -314,6 +360,23 @@ Each monitor writes a JSON state file to `logs/` on every cycle. The console rea
 | disk | `disk_state.json` | `drives[]`: `percent_used`, `free_gb`, `current_level` |
 | network | `network_state.json` | `hosts[]`: `reachable`, `latency_ms`, `current_level` |
 | document | `document_state.json` | `documents[]`: `measure`, `total`, `target`, `unit`, `percent_of_target`, `current_level`, `error`, `note` |
+
+Since v1.7.0 every state file also lists its open incidents under `incidents` (the incident assistant reads them).
+The threshold monitors write them from `Invoke-ThresholdAlerts`; the process monitor lists a required process that is
+down. Each entry:
+
+```json
+{
+  "id": "performance:cpu:critical",
+  "monitor": "performance", "target": "cpu", "level": "critical",
+  "opened_at": "2026-11-28 10:00:30", "exceeded_since": "2026-11-28 10:00:00",
+  "sustain_sec": 30, "threshold": 95, "peak": 99.1, "last_value": 97.2, "alert_count": 3
+}
+```
+
+`exceeded_since` is when the value first crossed the threshold, and `opened_at` is when the incident opened (after
+`sustain_sec`). `peak` is the worst value while it was open (the lowest for a `below` document threshold). A document's
+values are its percent of target. An unreachable host has no value, so `peak` and `last_value` are `null`.
 
 Every file has an `updated` timestamp. The console and the doctor treat a monitor as alive only while
 `now - updated < 2 × check interval + 15 s`.

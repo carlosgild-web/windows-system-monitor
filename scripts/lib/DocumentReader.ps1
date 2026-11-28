@@ -163,6 +163,9 @@ function Get-DocumentChecks ($Doc, [double]$Total, [datetime]$Now, [string]$Host
             BelowClear = $recovered
             SustainSec = 0
             ClearSec   = (Get-ClearSetting $t 'clear_sec' 0)
+            Value      = $pct                    # incidents track the percent of target
+            Threshold  = $limit
+            Below      = ($t.condition -eq 'below')
             Vars       = @{
                 timestamp         = $Now.ToString('yyyy-MM-dd HH:mm:ss')
                 hostname          = $Hostname
