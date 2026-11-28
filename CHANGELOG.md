@@ -10,6 +10,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `start_monitoring.bat video`: starts the test environment from a clean scratch copy (`%TEMP%\wsm-video`) with the
   incident assistant on, for recording the showcase. It refuses to start while ports 5757/5758 are in use, deletes
   only a copy it made, and leaves this project's settings and logs untouched.
+- README screenshots and GIF (`docs/showcase/`), recorded by `e2e/showcase/` (Playwright, dev-only: not in the
+  runtime, the Docker image or CI) on the real monitors in video mode. The GIF's model turns are a fixed script
+  (`MonitoringConsole/ai/scripted.py`, used only when `WSM_AI_SCRIPT` is set, labelled *Scripted replay (no AI)*);
+  the tools' results, the number check and the ticket fields are real.
+
+### Fixed
+- *Open incidents* shows each item once, at its highest open level (a warning stays open under a critical one).
+- *Draft with AI*: the ticket's Description no longer repeats the work notes (the email still carries both).
 
 ## [1.7.0] - 2026-11-28
 

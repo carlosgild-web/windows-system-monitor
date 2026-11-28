@@ -11,3 +11,6 @@ art
 *.xlsx
 **/__pycache__
 eval
+e2e
+video
+node_modules

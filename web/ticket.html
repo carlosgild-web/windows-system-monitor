@@ -316,12 +316,14 @@ function applyDraft(run) {
   const body = d.description + (d.work_notes ? '\n\n' + d.work_notes : '');
   T.subject = d.short_description; T.body = body; T.mailto = mailtoFor(T);
   render(T);
+  // The email body carries both; on the ticket the work notes have their own box.
+  $('t-desc').textContent = d.description;
   $('t-work').textContent = d.work_notes || '';
   $('t-work-sec').hidden = !d.work_notes;
   $('t-title').classList.add('drafted');
   const rules = !run.client.is_ai;
   const untraced = (run.check && run.check.untraced) || [];
-  aiBar(`<span class="ai-tag${rules ? ' rules' : ''}">${rules ? 'Demo (rules, no AI)' : 'AI draft'}</span>` +
+  aiBar(`<span class="ai-tag${rules ? ' rules' : ''}">${rules ? esc(run.client.label) : 'AI draft'}</span>` +
     `<span>Short description, description and work notes by <b>${esc(run.client.label)}</b>. ` +
     `Priority <b>${esc(d.priority)}</b>, impact, urgency and category are set by the rules, not the model.</span>` +
     (untraced.length ? `<span class="ai-flag">Check these numbers: ${untraced.map(esc).join(', ')} (not in the monitors' data).</span>`

@@ -1,0 +1,14 @@
+{
+  "name": "windows-system-monitor-showcase",
+  "private": true,
+  "version": "1.7.1",
+  "description": "Dev-only: records the README screenshots and GIF. Not part of the runtime, the Docker image or CI.",
+  "scripts": {
+    "showcase": "playwright test --grep-invert @gif",
+    "showcase:gif": "playwright test --grep @gif",
+    "install-browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1"
+  }
+}
