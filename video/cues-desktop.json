@@ -1,0 +1,8 @@
+{
+  "notes": [
+    "Desktop clips (desktop.mjs): windows Playwright cannot see, recorded with ffmpeg gdigrab and put in where they ran.",
+    "Times are seconds from the start of each clip. Filled in B4 (dry takes) for the ending: the alert's popup and the ticket window."
+  ],
+  "label": "Windows desktop (screen recording)",
+  "clips": {}
+}

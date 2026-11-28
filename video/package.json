@@ -1,0 +1,18 @@
+{
+  "name": "windows-system-monitor-video",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only: records the README video from the running console (docs/video.md). Not part of the runtime, the Docker image or CI.",
+  "scripts": {
+    "video:check": "node lines.mjs --check storyboard-ollama.json",
+    "video:test": "node --test compose.test.mjs cues.test.mjs",
+    "video:smoke": "playwright test --grep @smoke",
+    "video:dry": "playwright test --grep @dry && node cues.mjs out/dry && node compose.mjs out/dry --cut-gaps",
+    "video:ollama": "playwright test --grep @ollama && node cues.mjs out/ollama && node compose.mjs out/ollama --cut-gaps --readme",
+    "video:verify": "node cues.mjs out/ollama --verify"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "^24.19.2"
+  }
+}

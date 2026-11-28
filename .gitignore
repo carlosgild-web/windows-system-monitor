@@ -26,3 +26,4 @@ node_modules/
 e2e/showcase/test-results/
 docs/showcase/.gif-video/
 docs/showcase/*.webm
+video/out/

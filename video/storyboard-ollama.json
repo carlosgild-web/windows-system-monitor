@@ -1,0 +1,247 @@
+{
+ "video": "Windows System Monitor: a real model, under the hood",
+ "provider": "ollama",
+ "banner": "Real model: {model} (Ollama, on this PC)",
+ "mode": "flexible",
+ "hold": 0.6,
+ "notes": [
+  "Rows are shown by the recorder's scenes (record.spec.ts). Rows with \"on\" wait for a captured event: a step of the assistant's run (GET /api/ai/runs/{id}), the run's start or its end.",
+  "Payloads come only from the capture (events.json); cues.mjs checks them. Callouts are [file, symbol], resolved by lines.mjs at take time.",
+  "Flexible mode: a real model's steps vary; a row that never matched is listed in take.json, and unforeseen tool calls get at most VIDEO_MAX_GENERIC generic rows."
+ ],
+ "rows": [
+  {
+   "id": "0.1",
+   "scene": 0,
+   "slide": "hook",
+   "subtitle": "Windows System Monitor: the monitors decide; a small model on this PC explains."
+  },
+  {
+   "id": "1.1",
+   "scene": 1,
+   "layer": "Config",
+   "subtitle": "One JSON file is the source of truth: what to watch, the thresholds, the actions and the runbooks.",
+   "callouts": [
+    [
+     "monitoring_settings.json",
+     "processes.notepad.exe"
+    ]
+   ]
+  },
+  {
+   "id": "1.2",
+   "scene": 1,
+   "slide": "map",
+   "subtitle": "Five monitors run on their own and write state files; the console only reads them."
+  },
+  {
+   "id": "2.1",
+   "scene": 2,
+   "layer": "Monitors",
+   "subtitle": "The recorder closes Notepad. The process monitor notices on its next check.",
+   "callouts": [
+    [
+     "scripts/process_monitor.ps1",
+     "Write-StateFile"
+    ]
+   ]
+  },
+  {
+   "id": "2.2",
+   "scene": 2,
+   "layer": "State files",
+   "on": {
+    "event": "incident"
+   },
+   "subtitle": "One incident opens, with its start time and level: one incident, not a stream of alerts.",
+   "payload": {
+    "label": "GET /api/status → the open incident"
+   },
+   "callouts": [
+    [
+     "scripts/lib/MonitorActions.ps1",
+     "ConvertTo-IncidentRecord"
+    ]
+   ]
+  },
+  {
+   "id": "3.1",
+   "scene": 3,
+   "layer": "Agent",
+   "on": {
+    "event": "request",
+    "task": "explain"
+   },
+   "subtitle": "Explain: a small model on this PC, with four tools that can only read.",
+   "callouts": [
+    [
+     "MonitoringConsole/ai/tools.py",
+     "TOOLS"
+    ]
+   ]
+  },
+  {
+   "id": "3.2",
+   "scene": 3,
+   "layer": "Tools",
+   "on": {
+    "event": "tool",
+    "name": "get_incident"
+   },
+   "subtitle": "It reads the incident: what crossed the line, since when, and whether the monitor is still alive.",
+   "payload": {
+    "label": "tool result: get_incident",
+    "pick": "result"
+   },
+   "callouts": [
+    [
+     "MonitoringConsole/ai/tools.py",
+     "get_incident"
+    ]
+   ]
+  },
+  {
+   "id": "3.3",
+   "scene": 3,
+   "layer": "Tools",
+   "on": {
+    "event": "tool",
+    "name": "get_runbook"
+   },
+   "subtitle": "Then the runbook the operator wrote for this alert.",
+   "payload": {
+    "label": "tool result: get_runbook",
+    "pick": "result"
+   },
+   "callouts": [
+    [
+     "MonitoringConsole/ai/tools.py",
+     "get_runbook"
+    ]
+   ]
+  },
+  {
+   "id": "3.4",
+   "scene": 3,
+   "layer": "Tools",
+   "on": {
+    "event": "tool",
+    "name": "get_recent_events"
+   },
+   "subtitle": "And the latest log lines about this item.",
+   "payload": {
+    "label": "tool result: get_recent_events",
+    "pick": "result"
+   },
+   "callouts": [
+    [
+     "MonitoringConsole/ai/tools.py",
+     "get_recent_events"
+    ]
+   ],
+   "optional": true
+  },
+  {
+   "id": "3.5",
+   "scene": 3,
+   "layer": "Agent",
+   "on": {
+    "event": "gate"
+   },
+   "subtitle": "The model answered before reading, so the console read the data and asked again: no guess gets through.",
+   "callouts": [
+    [
+     "MonitoringConsole/ai/agent.py",
+     "REQUIRED_READS"
+    ]
+   ],
+   "optional": true
+  },
+  {
+   "id": "3.6",
+   "scene": 3,
+   "layer": "Check",
+   "on": {
+    "event": "done",
+    "task": "explain"
+   },
+   "subtitle": "Every number in the answer is checked against what the tools returned.",
+   "payload": {
+    "label": "GET /api/ai/runs/{id} → check",
+    "pick": "check"
+   },
+   "callouts": [
+    [
+     "MonitoringConsole/ai/check.py",
+     "check_numbers"
+    ]
+   ]
+  },
+  {
+   "id": "4.1",
+   "scene": 4,
+   "layer": "Ticket",
+   "subtitle": "A critical budget alert opened this ticket. Its priority comes from the rules.",
+   "callouts": [
+    [
+     "MonitoringConsole/ai/ticket.py",
+     "code_fields"
+    ]
+   ]
+  },
+  {
+   "id": "4.2",
+   "scene": 4,
+   "layer": "Model",
+   "on": {
+    "event": "request",
+    "task": "ticket"
+   },
+   "subtitle": "Draft with AI: the model writes the description and the work notes."
+  },
+  {
+   "id": "4.3",
+   "scene": 4,
+   "layer": "Ticket",
+   "on": {
+    "event": "done",
+    "task": "ticket"
+   },
+   "subtitle": "The model writes the text; the code sets the priority, impact and urgency.",
+   "payload": {
+    "label": "GET /api/ai/runs/{id} → ticket",
+    "pick": "ticket"
+   },
+   "callouts": [
+    [
+     "MonitoringConsole/ai/agent.py",
+     "AssistantRun._finish_ticket"
+    ]
+   ]
+  },
+  {
+   "id": "5.1",
+   "scene": 5,
+   "layer": "Console",
+   "subtitle": "The email is only a draft: nothing is sent until you open it in your mail app.",
+   "callouts": [
+    [
+     "web/ticket.html",
+     "mailtoFor"
+    ]
+   ]
+  },
+  {
+   "id": "6.1",
+   "scene": 6,
+   "slide": "eval",
+   "subtitle": "Monitor data is data, never instructions: 21 scenarios, injection included, failures published."
+  },
+  {
+   "id": "7.1",
+   "scene": 7,
+   "slide": "end",
+   "subtitle": "Windows System Monitor. The monitors decide; the AI explains."
+  }
+ ]
+}
