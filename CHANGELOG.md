@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-28
+
 ### Added
 - `start_monitoring.bat video`: starts the test environment from a clean scratch copy (`%TEMP%\wsm-video`) with the
   incident assistant on, for recording the showcase. It refuses to start while ports 5757/5758 are in use, deletes
@@ -199,7 +201,8 @@ First public release.
 - Config paths are relative to the project folder, so the repo runs from any location.
 - `{latency_ms}` in network templates refers to the threshold, consistent with the other monitors.
 
-[Unreleased]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/carlosgild-web/windows-system-monitor/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/carlosgild-web/windows-system-monitor/releases/tag/v1.5.0

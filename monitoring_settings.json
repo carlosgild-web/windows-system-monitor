@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "version": "1.7.0",
+    "version": "1.7.1",
     "last_updated": "2026-11-28",
     "description": "Default test environment: one or more monitors per category for things every Windows 10/11 PC has, plus demo toggles (Notepad, the settings editor, the budget CSV, the monitor log size). See docs/test-environment.md.",
     "update_notes": "Bump version and update last_updated whenever you change this file."
