@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- `start_monitoring.bat video`: starts the test environment from a clean scratch copy (`%TEMP%\wsm-video`) with the
+  incident assistant on, for recording the showcase. It refuses to start while ports 5757/5758 are in use, deletes
+  only a copy it made, and leaves this project's settings and logs untouched.
+
 ## [1.7.0] - 2026-11-28
 
 ### Added
