@@ -48,7 +48,7 @@ Built by **Carlos Velazquez** · [LinkedIn](https://www.linkedin.com/in/carlos-v
 - **Tool calling without a framework or dependencies:** a bounded, traced loop on Ollama's `tools` API in standard-library Python, with a grounding gate: no answer is accepted before the data has been read ([`agent.py`](MonitoringConsole/ai/agent.py)).
 - **Grounded answers, tested against injection:** every number in an answer is checked against the tools' results; instructions planted in a process name, a document value and a log line are never obeyed ([`tests/python/test_ai_agent.py`](tests/python/test_ai_agent.py)).
 - **Evaluation, failures published:** 21 incident scenarios scored from traces; a scripted reference must pass in CI, and two runs on the real model are written up ([`docs/eval/`](docs/eval/README.md)).
-- **Windows automation depth:** five PowerShell 5.1 monitors, escalating actions with hysteresis, persisted incidents, a self-diagnosing doctor, 242 Pester tests.
+- **Windows automation depth:** five PowerShell 5.1 monitors, escalating actions with hysteresis, persisted incidents, a self-diagnosing doctor, 246 Pester tests.
 - **Secure local web apps:** localhost-only, same-origin APIs with CSRF and DNS-rebinding protection, in GitHub Actions on `windows-latest`, plus a Docker demo with an optional Ollama container.
 
 ## The problem
@@ -187,7 +187,7 @@ Configuration reference, including the `ai` section and runbooks: **[docs/config
 
 ```powershell
 python -m unittest discover -s tests/python -v      # 178 tests: servers, console, assistant, evaluation
-Invoke-Pester tests/powershell                      # 242 tests (Pester 5.5+): monitors, actions, doctor, script rules
+Invoke-Pester tests/powershell                      # 246 tests (Pester 5.5+): monitors, actions, doctor, script rules
 python eval/assistant_eval.py                       # the 21 scenarios (scripted); --client ollama for the real model
 ```
 

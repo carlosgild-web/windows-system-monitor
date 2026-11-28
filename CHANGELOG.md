@@ -23,7 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 - README to the portfolio standard: the GIF and the video first, a 3-line quick start, *What this demonstrates*,
   *The problem*, *Before and after*, the invariants table (each with the file that enforces it and its test),
-  *Evaluation*, *Honest limitations*, counts from a real run (178 Python, 242 Pester). The old README GIF
+  *Evaluation*, *Honest limitations*, counts from a real run (178 Python, 246 Pester). The old README GIF
   (`docs/screenshots/demo.gif`) is replaced by `docs/showcase/demo.gif`.
 - A test checks that the five monitors and their libraries never call the model.
 
