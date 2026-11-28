@@ -22,8 +22,7 @@ console labels them "Scripted replay"); the video below runs a real one.</sub>
 
 ### The 2-minute video: a real model, under the hood
 
-[![The video's poster: the Explain panel with the answer and the checked numbers, and the Under the hood panel](docs/showcase/poster.png)](docs/video.md)
-<!-- VIDEO_URL: replace the poster link above with the user-attachments URL of video/out/ollama/video-readme.mp4 -->
+https://github.com/user-attachments/assets/93667565-31b3-430a-9513-aa4d0c231490
 
 `qwen3:4b-instruct` on Ollama, on a CPU-only laptop, next to the code and the data behind each step. Recorded in two
 passes (the model ran alone first), with every wait labelled. **[What it shows, and is it real? →](docs/video.md)**
