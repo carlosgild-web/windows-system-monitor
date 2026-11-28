@@ -6,6 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+- The README plays the video inline (its GitHub upload replaces the poster link).
+
 ## [1.7.1] - 2026-11-28
 
 ### Added
